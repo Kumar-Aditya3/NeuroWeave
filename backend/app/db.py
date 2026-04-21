@@ -2,7 +2,7 @@ import json
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Tuple
 
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = ROOT / "data.db"
@@ -40,6 +40,15 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE events ADD COLUMN device_id TEXT")
     if not _column_exists(conn, "events", "client_name"):
         conn.execute("ALTER TABLE events ADD COLUMN client_name TEXT")
+    if not _column_exists(conn, "events", "dedupe_key"):
+        conn.execute("ALTER TABLE events ADD COLUMN dedupe_key TEXT")
+    conn.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_events_dedupe_key
+        ON events(dedupe_key)
+        WHERE dedupe_key IS NOT NULL
+        """
+    )
 
 
 def create_event(
@@ -57,7 +66,8 @@ def create_event(
     sentiment: str,
     vibe: str,
     created_at: str,
-) -> int:
+    dedupe_key: str | None = None,
+) -> Tuple[int, bool]:
     payload = {
         "user_id": user_id,
         "device_id": device_id,
@@ -72,23 +82,31 @@ def create_event(
         "sentiment": sentiment,
         "vibe": vibe,
         "created_at": created_at,
+        "dedupe_key": dedupe_key,
     }
     with get_connection() as conn:
         cursor = conn.execute(
             """
-            INSERT INTO events (
+            INSERT OR IGNORE INTO events (
                 user_id, device_id, client_name, source, event_type, url, title, selected_text,
-                content_text, topic_scores_json, sentiment, vibe, created_at
+                content_text, topic_scores_json, sentiment, vibe, created_at, dedupe_key
             )
             VALUES (
                 :user_id, :device_id, :client_name, :source, :event_type, :url, :title, :selected_text,
-                :content_text, :topic_scores_json, :sentiment, :vibe, :created_at
+                :content_text, :topic_scores_json, :sentiment, :vibe, :created_at, :dedupe_key
             )
             """,
             payload,
         )
+        if cursor.rowcount == 0 and dedupe_key:
+            row = conn.execute(
+                "SELECT id FROM events WHERE dedupe_key = ?",
+                (dedupe_key,),
+            ).fetchone()
+            conn.commit()
+            return int(row["id"]), True
         conn.commit()
-        return int(cursor.lastrowid)
+        return int(cursor.lastrowid), False
 
 
 def upsert_profile_score(
@@ -234,6 +252,38 @@ def get_user_sources(user_id: str) -> list[dict]:
             "device_id": str(row["device_id"]),
             "client_name": str(row["client_name"]),
             "last_seen_at": str(row["last_seen_at"]),
+        }
+        for row in rows
+    ]
+
+
+def get_recent_events(user_id: str, limit: int = 20) -> list[dict]:
+    safe_limit = max(1, min(limit, 100))
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, user_id, device_id, client_name, source, event_type,
+                   url, title, sentiment, vibe, created_at
+            FROM events
+            WHERE user_id = ?
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (user_id, safe_limit),
+        ).fetchall()
+    return [
+        {
+            "id": int(row["id"]),
+            "user_id": str(row["user_id"]),
+            "device_id": row["device_id"],
+            "client_name": row["client_name"],
+            "source": str(row["source"]),
+            "event_type": str(row["event_type"]),
+            "url": row["url"],
+            "title": row["title"],
+            "sentiment": str(row["sentiment"]),
+            "vibe": str(row["vibe"]),
+            "created_at": str(row["created_at"]),
         }
         for row in rows
     ]

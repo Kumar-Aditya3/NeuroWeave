@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>NeuroWeave</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>NeuroWeave</h1>
+        <label class="switch">
+          <input id="trackingEnabled" type="checkbox">
+          <span>Tracking</span>
+        </label>
+      </header>
+
+      <label>
+        User
+        <input id="userId" type="text">
+      </label>
+
+      <label>
+        Device name
+        <input id="clientName" type="text">
+      </label>
+
+      <label>
+        Backend URL
+        <input id="backendUrl" type="url">
+      </label>
+
+      <label>
+        API key
+        <input id="apiKey" type="password">
+      </label>
+
+      <p id="status"></p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS events (
     topic_scores_json TEXT NOT NULL,
     sentiment TEXT NOT NULL,
     vibe TEXT NOT NULL,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    dedupe_key TEXT UNIQUE
 );
 
 CREATE TABLE IF NOT EXISTS devices (

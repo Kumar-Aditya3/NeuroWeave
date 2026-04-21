@@ -1,0 +1,5 @@
+__pycache__/
+*.py[cod]
+.venv/
+backend/data.db
+agent/config.local.json

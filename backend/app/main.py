@@ -1,4 +1,5 @@
-from datetime import timezone
+from datetime import datetime, timezone
+from hashlib import sha256
 from typing import Dict
 
 from fastapi import Depends, FastAPI
@@ -8,6 +9,7 @@ from .db import (
     create_event,
     create_feedback,
     get_latest_vibe,
+    get_recent_events,
     get_user_sources,
     get_weighted_profile,
     init_db,
@@ -16,12 +18,14 @@ from .db import (
     utc_now_iso,
 )
 from .models import (
+    ActivityIngestRequest,
     ContextRecommendation,
     FeedbackRequest,
     HealthResponse,
     IngestResponse,
     PageIngestRequest,
     PdfIngestRequest,
+    RecentEventsResponse,
     SourcesResponse,
 )
 
@@ -36,6 +40,7 @@ TOPIC_KEYWORDS = {
 
 POSITIVE_WORDS = {"calm", "happy", "growth", "focus", "hope", "progress", "joy"}
 NEGATIVE_WORDS = {"angry", "sad", "dark", "stress", "anxiety", "doom", "rage"}
+DEDUPE_BUCKET_SECONDS = 300
 
 
 def classify_text(text: str) -> Dict[str, object]:
@@ -102,6 +107,36 @@ def recommendation_map(primary_topic: str, vibe: str) -> Dict[str, object]:
     }
 
 
+def normalize_created_at(timestamp: datetime | None) -> str:
+    if not timestamp:
+        return utc_now_iso()
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.replace(tzinfo=timezone.utc)
+    return timestamp.astimezone(timezone.utc).isoformat()
+
+
+def dedupe_key_for(
+    *,
+    user_id: str,
+    device_id: str,
+    event_type: str,
+    title: str | None,
+    created_at: str,
+) -> str:
+    parsed = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+    bucket = int(parsed.timestamp() // DEDUPE_BUCKET_SECONDS)
+    raw = "|".join(
+        [
+            user_id.strip().lower(),
+            device_id.strip().lower(),
+            event_type.strip().lower(),
+            (title or "").strip().lower(),
+            str(bucket),
+        ]
+    )
+    return sha256(raw.encode("utf-8")).hexdigest()
+
+
 app = FastAPI(title="NeuroWeave API", version="0.1.0")
 
 
@@ -128,18 +163,21 @@ def ingest_page(
         ]
     )
     analysis = classify_text(text_blob)
-    created_at = (
-        payload.timestamp.replace(tzinfo=timezone.utc).isoformat()
-        if payload.timestamp
-        else utc_now_iso()
+    created_at = normalize_created_at(payload.timestamp)
+    dedupe_key = dedupe_key_for(
+        user_id=payload.user_id,
+        device_id=payload.device_id,
+        event_type="browser_tab",
+        title=payload.title,
+        created_at=created_at,
     )
 
-    event_id = create_event(
+    event_id, deduped = create_event(
         user_id=payload.user_id,
         device_id=payload.device_id,
         client_name=payload.client_name,
-        source=payload.source,
-        event_type="page",
+        source="browser_tab",
+        event_type="browser_tab",
         url=str(payload.url),
         title=payload.title,
         selected_text=payload.selected_text,
@@ -148,12 +186,15 @@ def ingest_page(
         sentiment=analysis["sentiment"],
         vibe=analysis["vibe"],
         created_at=created_at,
+        dedupe_key=dedupe_key,
     )
     upsert_device(payload.user_id, payload.device_id, payload.client_name)
-    update_profiles(payload.user_id, analysis["topic_scores"])
+    if not deduped:
+        update_profiles(payload.user_id, analysis["topic_scores"])
 
     return IngestResponse(
         event_id=event_id,
+        deduped=deduped,
         topic_scores=analysis["topic_scores"],
         sentiment=analysis["sentiment"],
         vibe=analysis["vibe"],
@@ -167,12 +208,15 @@ def ingest_pdf(
 ) -> IngestResponse:
     text_blob = f"{payload.filename}\n{payload.text}"
     analysis = classify_text(text_blob)
-    created_at = (
-        payload.timestamp.replace(tzinfo=timezone.utc).isoformat()
-        if payload.timestamp
-        else utc_now_iso()
+    created_at = normalize_created_at(payload.timestamp)
+    dedupe_key = dedupe_key_for(
+        user_id=payload.user_id,
+        device_id=payload.device_id,
+        event_type="pdf",
+        title=payload.filename,
+        created_at=created_at,
     )
-    event_id = create_event(
+    event_id, deduped = create_event(
         user_id=payload.user_id,
         device_id=payload.device_id,
         client_name=payload.client_name,
@@ -186,11 +230,66 @@ def ingest_pdf(
         sentiment=analysis["sentiment"],
         vibe=analysis["vibe"],
         created_at=created_at,
+        dedupe_key=dedupe_key,
     )
     upsert_device(payload.user_id, payload.device_id, payload.client_name)
-    update_profiles(payload.user_id, analysis["topic_scores"])
+    if not deduped:
+        update_profiles(payload.user_id, analysis["topic_scores"])
     return IngestResponse(
         event_id=event_id,
+        deduped=deduped,
+        topic_scores=analysis["topic_scores"],
+        sentiment=analysis["sentiment"],
+        vibe=analysis["vibe"],
+    )
+
+
+@app.post("/ingest/activity", response_model=IngestResponse)
+def ingest_activity(
+    payload: ActivityIngestRequest,
+    _: str = Depends(require_api_key),
+) -> IngestResponse:
+    text_blob = " ".join(
+        [
+            payload.title,
+            str(payload.url or ""),
+            payload.process_name or "",
+            payload.category or "",
+            payload.selected_text or "",
+            payload.content_text or "",
+        ]
+    )
+    analysis = classify_text(text_blob)
+    created_at = normalize_created_at(payload.timestamp)
+    dedupe_key = dedupe_key_for(
+        user_id=payload.user_id,
+        device_id=payload.device_id,
+        event_type=payload.event_type,
+        title=payload.title,
+        created_at=created_at,
+    )
+    event_id, deduped = create_event(
+        user_id=payload.user_id,
+        device_id=payload.device_id,
+        client_name=payload.client_name,
+        source=payload.source,
+        event_type=payload.event_type,
+        url=str(payload.url) if payload.url else None,
+        title=payload.title,
+        selected_text=payload.selected_text,
+        content_text=text_blob,
+        topic_scores=analysis["topic_scores"],
+        sentiment=analysis["sentiment"],
+        vibe=analysis["vibe"],
+        created_at=created_at,
+        dedupe_key=dedupe_key,
+    )
+    upsert_device(payload.user_id, payload.device_id, payload.client_name)
+    if not deduped:
+        update_profiles(payload.user_id, analysis["topic_scores"])
+    return IngestResponse(
+        event_id=event_id,
+        deduped=deduped,
         topic_scores=analysis["topic_scores"],
         sentiment=analysis["sentiment"],
         vibe=analysis["vibe"],
@@ -199,7 +298,7 @@ def ingest_pdf(
 
 @app.get("/recommend/context", response_model=ContextRecommendation)
 def recommend_context(
-    user_id: str = "default",
+    user_id: str = "kumar",
     _: str = Depends(require_api_key),
 ) -> ContextRecommendation:
     profile = get_weighted_profile(user_id)
@@ -232,8 +331,18 @@ def feedback(
 
 @app.get("/me/sources", response_model=SourcesResponse)
 def me_sources(
-    user_id: str = "default",
+    user_id: str = "kumar",
     _: str = Depends(require_api_key),
 ) -> SourcesResponse:
     sources = get_user_sources(user_id)
     return SourcesResponse(user_id=user_id, sources=sources)
+
+
+@app.get("/me/recent-events", response_model=RecentEventsResponse)
+def me_recent_events(
+    user_id: str = "kumar",
+    limit: int = 20,
+    _: str = Depends(require_api_key),
+) -> RecentEventsResponse:
+    events = get_recent_events(user_id, limit)
+    return RecentEventsResponse(user_id=user_id, events=events)

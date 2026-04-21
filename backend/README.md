@@ -11,8 +11,10 @@ Current focus is desktop-first and opt-in: ingest user-approved content signals,
 
 - Browser event ingestion via `POST /ingest/page` (URL, title, selected text, timestamp, `device_id`, `client_name`)
 - PDF text ingestion via `POST /ingest/pdf` (parsed text payload, `device_id`, `client_name`)
+- Generic activity ingestion via `POST /ingest/activity`
 - Feedback capture via `POST /feedback` (`keep`, `skip`, `like`)
 - Source visibility via `GET /me/sources`
+- Recent activity debugging via `GET /me/recent-events`
 
 ### Content Understanding
 
@@ -25,6 +27,7 @@ Current focus is desktop-first and opt-in: ingest user-approved content signals,
 
 - SQLite-backed event store and profile tables
 - Device registry table for cross-device source tracking
+- Event dedupe over short time buckets to reduce repeated profile inflation
 - Dual preference windows:
   - `short_term` profile with faster decay
   - `long_term` profile with slower decay
@@ -42,6 +45,32 @@ Current focus is desktop-first and opt-in: ingest user-approved content signals,
 
 - API-key protected ingestion and recommendation endpoints using `X-API-Key`
 - Valid keys are configured via `NEUROWEAVE_API_KEYS` (comma-separated)
+
+## Local Collectors
+
+### Browser Extension
+
+The `extension/` folder contains a shared Chromium extension for Chrome and Opera GX.
+
+- Load it as an unpacked extension.
+- Set the same `user_id` on every browser, usually `kumar`.
+- Give each browser/device a clear `client_name`.
+- Turn tracking on only when you want tab activity sent.
+
+### Windows Agent
+
+The `agent/` folder contains the first desktop collector.
+
+```bash
+pip install -r agent/requirements.txt
+python -m agent.run
+```
+
+On first run it creates `agent/config.local.json` with a persistent `device_id`.
+
+- `active_app_enabled` tracks active window titles and process names.
+- `ocr_enabled` is off by default.
+- OCR reads only the active window and sends extracted text, not screenshots.
 
 ### Stack
 
