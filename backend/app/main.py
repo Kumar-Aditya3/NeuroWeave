@@ -1,14 +1,17 @@
 from datetime import timezone
 from typing import Dict
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 
+from .auth import require_api_key
 from .db import (
     create_event,
     create_feedback,
     get_latest_vibe,
+    get_user_sources,
     get_weighted_profile,
     init_db,
+    upsert_device,
     update_profiles,
     utc_now_iso,
 )
@@ -19,6 +22,7 @@ from .models import (
     IngestResponse,
     PageIngestRequest,
     PdfIngestRequest,
+    SourcesResponse,
 )
 
 TOPIC_KEYWORDS = {
@@ -112,7 +116,10 @@ def health() -> HealthResponse:
 
 
 @app.post("/ingest/page", response_model=IngestResponse)
-def ingest_page(payload: PageIngestRequest) -> IngestResponse:
+def ingest_page(
+    payload: PageIngestRequest,
+    _: str = Depends(require_api_key),
+) -> IngestResponse:
     text_blob = " ".join(
         [
             payload.title,
@@ -129,6 +136,8 @@ def ingest_page(payload: PageIngestRequest) -> IngestResponse:
 
     event_id = create_event(
         user_id=payload.user_id,
+        device_id=payload.device_id,
+        client_name=payload.client_name,
         source=payload.source,
         event_type="page",
         url=str(payload.url),
@@ -140,6 +149,7 @@ def ingest_page(payload: PageIngestRequest) -> IngestResponse:
         vibe=analysis["vibe"],
         created_at=created_at,
     )
+    upsert_device(payload.user_id, payload.device_id, payload.client_name)
     update_profiles(payload.user_id, analysis["topic_scores"])
 
     return IngestResponse(
@@ -151,7 +161,10 @@ def ingest_page(payload: PageIngestRequest) -> IngestResponse:
 
 
 @app.post("/ingest/pdf", response_model=IngestResponse)
-def ingest_pdf(payload: PdfIngestRequest) -> IngestResponse:
+def ingest_pdf(
+    payload: PdfIngestRequest,
+    _: str = Depends(require_api_key),
+) -> IngestResponse:
     text_blob = f"{payload.filename}\n{payload.text}"
     analysis = classify_text(text_blob)
     created_at = (
@@ -161,6 +174,8 @@ def ingest_pdf(payload: PdfIngestRequest) -> IngestResponse:
     )
     event_id = create_event(
         user_id=payload.user_id,
+        device_id=payload.device_id,
+        client_name=payload.client_name,
         source=payload.source,
         event_type="pdf",
         url=None,
@@ -172,6 +187,7 @@ def ingest_pdf(payload: PdfIngestRequest) -> IngestResponse:
         vibe=analysis["vibe"],
         created_at=created_at,
     )
+    upsert_device(payload.user_id, payload.device_id, payload.client_name)
     update_profiles(payload.user_id, analysis["topic_scores"])
     return IngestResponse(
         event_id=event_id,
@@ -182,7 +198,10 @@ def ingest_pdf(payload: PdfIngestRequest) -> IngestResponse:
 
 
 @app.get("/recommend/context", response_model=ContextRecommendation)
-def recommend_context(user_id: str = "default") -> ContextRecommendation:
+def recommend_context(
+    user_id: str = "default",
+    _: str = Depends(require_api_key),
+) -> ContextRecommendation:
     profile = get_weighted_profile(user_id)
     primary_topic = max(profile, key=profile.get) if profile else "tech"
     vibe = get_latest_vibe(user_id)
@@ -199,10 +218,22 @@ def recommend_context(user_id: str = "default") -> ContextRecommendation:
 
 
 @app.post("/feedback")
-def feedback(payload: FeedbackRequest) -> dict:
+def feedback(
+    payload: FeedbackRequest,
+    _: str = Depends(require_api_key),
+) -> dict:
     create_feedback(
         user_id=payload.user_id,
         recommendation_topic=payload.recommendation_topic,
         action=payload.action,
     )
     return {"status": "accepted"}
+
+
+@app.get("/me/sources", response_model=SourcesResponse)
+def me_sources(
+    user_id: str = "default",
+    _: str = Depends(require_api_key),
+) -> SourcesResponse:
+    sources = get_user_sources(user_id)
+    return SourcesResponse(user_id=user_id, sources=sources)

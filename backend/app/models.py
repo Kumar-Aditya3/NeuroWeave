@@ -12,6 +12,8 @@ FeedbackAction = Literal["keep", "skip", "like"]
 
 class PageIngestRequest(BaseModel):
     user_id: str = Field(default="default")
+    device_id: str = Field(min_length=1)
+    client_name: str = Field(min_length=1)
     source: Literal["extension"] = Field(default="extension")
     url: HttpUrl
     title: str
@@ -21,6 +23,8 @@ class PageIngestRequest(BaseModel):
 
 class PdfIngestRequest(BaseModel):
     user_id: str = Field(default="default")
+    device_id: str = Field(min_length=1)
+    client_name: str = Field(min_length=1)
     source: Literal["pdf_upload"] = Field(default="pdf_upload")
     filename: str
     text: str = Field(min_length=1)
@@ -52,3 +56,14 @@ class FeedbackRequest(BaseModel):
 
 class HealthResponse(BaseModel):
     status: str
+
+
+class SourceDevice(BaseModel):
+    device_id: str
+    client_name: str
+    last_seen_at: str
+
+
+class SourcesResponse(BaseModel):
+    user_id: str
+    sources: list[SourceDevice]

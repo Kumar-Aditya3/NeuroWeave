@@ -26,12 +26,27 @@ def init_db() -> None:
     with get_connection() as conn:
         schema_sql = SCHEMA_PATH.read_text(encoding="utf-8")
         conn.executescript(schema_sql)
+        _run_migrations(conn)
         conn.commit()
+
+
+def _column_exists(conn: sqlite3.Connection, table: str, column: str) -> bool:
+    rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+    return any(row["name"] == column for row in rows)
+
+
+def _run_migrations(conn: sqlite3.Connection) -> None:
+    if not _column_exists(conn, "events", "device_id"):
+        conn.execute("ALTER TABLE events ADD COLUMN device_id TEXT")
+    if not _column_exists(conn, "events", "client_name"):
+        conn.execute("ALTER TABLE events ADD COLUMN client_name TEXT")
 
 
 def create_event(
     *,
     user_id: str,
+    device_id: str | None,
+    client_name: str | None,
     source: str,
     event_type: str,
     url: str | None,
@@ -45,6 +60,8 @@ def create_event(
 ) -> int:
     payload = {
         "user_id": user_id,
+        "device_id": device_id,
+        "client_name": client_name,
         "source": source,
         "event_type": event_type,
         "url": url,
@@ -60,11 +77,11 @@ def create_event(
         cursor = conn.execute(
             """
             INSERT INTO events (
-                user_id, source, event_type, url, title, selected_text,
+                user_id, device_id, client_name, source, event_type, url, title, selected_text,
                 content_text, topic_scores_json, sentiment, vibe, created_at
             )
             VALUES (
-                :user_id, :source, :event_type, :url, :title, :selected_text,
+                :user_id, :device_id, :client_name, :source, :event_type, :url, :title, :selected_text,
                 :content_text, :topic_scores_json, :sentiment, :vibe, :created_at
             )
             """,
@@ -182,3 +199,41 @@ def create_feedback(user_id: str, recommendation_topic: str, action: str) -> Non
             (user_id, recommendation_topic, action, utc_now_iso()),
         )
         conn.commit()
+
+
+def upsert_device(user_id: str, device_id: str, client_name: str) -> None:
+    now = utc_now_iso()
+    with get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO devices (user_id, device_id, client_name, last_seen_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(user_id, device_id)
+            DO UPDATE SET
+                client_name = excluded.client_name,
+                last_seen_at = excluded.last_seen_at
+            """,
+            (user_id, device_id, client_name, now),
+        )
+        conn.commit()
+
+
+def get_user_sources(user_id: str) -> list[dict]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT device_id, client_name, last_seen_at
+            FROM devices
+            WHERE user_id = ?
+            ORDER BY last_seen_at DESC
+            """,
+            (user_id,),
+        ).fetchall()
+    return [
+        {
+            "device_id": str(row["device_id"]),
+            "client_name": str(row["client_name"]),
+            "last_seen_at": str(row["last_seen_at"]),
+        }
+        for row in rows
+    ]

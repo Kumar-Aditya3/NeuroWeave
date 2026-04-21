@@ -9,9 +9,10 @@ Current focus is desktop-first and opt-in: ingest user-approved content signals,
 
 ### Data Ingestion
 
-- Browser event ingestion via `POST /ingest/page` (URL, title, selected text, timestamp)
-- PDF text ingestion via `POST /ingest/pdf` (parsed text payload)
+- Browser event ingestion via `POST /ingest/page` (URL, title, selected text, timestamp, `device_id`, `client_name`)
+- PDF text ingestion via `POST /ingest/pdf` (parsed text payload, `device_id`, `client_name`)
 - Feedback capture via `POST /feedback` (`keep`, `skip`, `like`)
+- Source visibility via `GET /me/sources`
 
 ### Content Understanding
 
@@ -23,6 +24,7 @@ Current focus is desktop-first and opt-in: ingest user-approved content signals,
 ### User Profile Modeling
 
 - SQLite-backed event store and profile tables
+- Device registry table for cross-device source tracking
 - Dual preference windows:
   - `short_term` profile with faster decay
   - `long_term` profile with slower decay
@@ -35,6 +37,11 @@ Current focus is desktop-first and opt-in: ingest user-approved content signals,
   - wallpaper tags
   - music mood
   - quote style
+
+### Access Control
+
+- API-key protected ingestion and recommendation endpoints using `X-API-Key`
+- Valid keys are configured via `NEUROWEAVE_API_KEYS` (comma-separated)
 
 ### Stack
 

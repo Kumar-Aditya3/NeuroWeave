@@ -1,6 +1,8 @@
 CREATE TABLE IF NOT EXISTS events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id TEXT NOT NULL,
+    device_id TEXT,
+    client_name TEXT,
     source TEXT NOT NULL,
     event_type TEXT NOT NULL,
     url TEXT,
@@ -11,6 +13,15 @@ CREATE TABLE IF NOT EXISTS events (
     sentiment TEXT NOT NULL,
     vibe TEXT NOT NULL,
     created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS devices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    device_id TEXT NOT NULL,
+    client_name TEXT NOT NULL,
+    last_seen_at TEXT NOT NULL,
+    UNIQUE (user_id, device_id)
 );
 
 CREATE TABLE IF NOT EXISTS profile_scores (
