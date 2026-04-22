@@ -19,7 +19,8 @@ Current focus is desktop-first and opt-in: ingest user-approved content signals,
 ### Content Understanding
 
 - Keyword-based topical scoring across:
-  - `tech`, `anime`, `fitness`, `philosophy`, `self-help`, `news`
+  - `tech`, `education`, `anime`, `fitness`, `philosophy`, `self-help`, `news`, `unknown`
+- Unknown content is tracked as `unknown` instead of being forced into a topic.
 - Basic sentiment detection (`positive`, `neutral`, `negative`)
 - Basic vibe detection (`calm`, `balanced`, `intense`, `dark`)
 

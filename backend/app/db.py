@@ -8,7 +8,16 @@ ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = ROOT / "data.db"
 SCHEMA_PATH = ROOT / "sql" / "schema.sql"
 
-TOPICS = ["tech", "anime", "fitness", "philosophy", "self-help", "news"]
+TOPICS = [
+    "tech",
+    "education",
+    "anime",
+    "fitness",
+    "philosophy",
+    "self-help",
+    "news",
+    "unknown",
+]
 
 
 def utc_now_iso() -> str:

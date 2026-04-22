@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from hashlib import sha256
+import re
 from typing import Dict
 
 from fastapi import Depends, FastAPI
@@ -31,11 +32,27 @@ from .models import (
 
 TOPIC_KEYWORDS = {
     "tech": ["python", "fastapi", "ml", "ai", "code", "programming", "software"],
+    "education": [
+        "swayam",
+        "course",
+        "courses",
+        "learn",
+        "learning",
+        "lecture",
+        "exam",
+        "study",
+        "student",
+        "university",
+        "college",
+        "nptel",
+        "mooc",
+    ],
     "anime": ["anime", "manga", "otaku", "episode", "studio", "shonen"],
     "fitness": ["fitness", "workout", "gym", "cardio", "strength", "nutrition"],
     "philosophy": ["philosophy", "ethics", "stoic", "stoicism", "meaning", "existence"],
     "self-help": ["habit", "motivation", "focus", "discipline", "self improvement"],
     "news": ["news", "breaking", "update", "world", "politics", "economy"],
+    "unknown": [],
 }
 
 POSITIVE_WORDS = {"calm", "happy", "growth", "focus", "hope", "progress", "joy"}
@@ -47,7 +64,7 @@ def classify_text(text: str) -> Dict[str, object]:
     lowered = text.lower()
     topic_scores: Dict[str, float] = {}
     for topic, keywords in TOPIC_KEYWORDS.items():
-        matches = sum(lowered.count(word) for word in keywords)
+        matches = sum(count_keyword_matches(lowered, word) for word in keywords)
         topic_scores[topic] = float(matches)
 
     total = sum(topic_scores.values())
@@ -55,7 +72,7 @@ def classify_text(text: str) -> Dict[str, object]:
         topic_scores = {k: round(v / total, 4) for k, v in topic_scores.items()}
     else:
         topic_scores = {k: 0.0 for k in TOPIC_KEYWORDS.keys()}
-        topic_scores["tech"] = 1.0
+        topic_scores["unknown"] = 1.0
 
     positive_hits = sum(lowered.count(word) for word in POSITIVE_WORDS)
     negative_hits = sum(lowered.count(word) for word in NEGATIVE_WORDS)
@@ -79,14 +96,22 @@ def classify_text(text: str) -> Dict[str, object]:
     return {"topic_scores": topic_scores, "sentiment": sentiment, "vibe": vibe}
 
 
+def count_keyword_matches(text: str, keyword: str) -> int:
+    escaped = re.escape(keyword.lower())
+    pattern = rf"(?<!\w){escaped}(?!\w)"
+    return len(re.findall(pattern, text))
+
+
 def recommendation_map(primary_topic: str, vibe: str) -> Dict[str, object]:
     wallpaper_by_topic = {
         "tech": ["minimal", "dark-ui", "futuristic"],
+        "education": ["library", "desk-setup", "warm-focus"],
         "anime": ["cinematic", "neon", "character-art"],
         "fitness": ["dynamic", "high-contrast", "athletic"],
         "philosophy": ["abstract", "statue", "monochrome"],
         "self-help": ["clean", "focus", "morning-light"],
         "news": ["editorial", "world-map", "neutral"],
+        "unknown": ["neutral", "minimal", "soft-light"],
     }
     music_by_vibe = {
         "calm": "lofi / ambient",
@@ -302,7 +327,9 @@ def recommend_context(
     _: str = Depends(require_api_key),
 ) -> ContextRecommendation:
     profile = get_weighted_profile(user_id)
-    primary_topic = max(profile, key=profile.get) if profile else "tech"
+    primary_topic = "unknown"
+    if profile and max(profile.values()) > 0:
+        primary_topic = max(profile, key=profile.get)
     vibe = get_latest_vibe(user_id)
     mapped = recommendation_map(primary_topic, vibe)
     return ContextRecommendation(

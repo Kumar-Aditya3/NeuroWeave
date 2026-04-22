@@ -4,7 +4,16 @@ from typing import Dict, Literal, Optional
 from pydantic import BaseModel, Field, HttpUrl
 
 
-Topic = Literal["tech", "anime", "fitness", "philosophy", "self-help", "news"]
+Topic = Literal[
+    "tech",
+    "education",
+    "anime",
+    "fitness",
+    "philosophy",
+    "self-help",
+    "news",
+    "unknown",
+]
 Sentiment = Literal["positive", "neutral", "negative"]
 Vibe = Literal["calm", "balanced", "intense", "dark"]
 FeedbackAction = Literal["keep", "skip", "like"]
