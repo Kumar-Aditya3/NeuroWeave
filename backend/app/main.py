@@ -21,6 +21,7 @@ from .db import (
 from .models import (
     ActivityIngestRequest,
     ContextRecommendation,
+    DashboardResponse,
     FeedbackRequest,
     HealthResponse,
     IngestResponse,
@@ -175,6 +176,24 @@ def health() -> HealthResponse:
     return HealthResponse(status="ok")
 
 
+def build_context_recommendation(user_id: str) -> ContextRecommendation:
+    profile = get_weighted_profile(user_id)
+    primary_topic = "unknown"
+    if profile and max(profile.values()) > 0:
+        primary_topic = max(profile, key=profile.get)
+    vibe = get_latest_vibe(user_id)
+    mapped = recommendation_map(primary_topic, vibe)
+    return ContextRecommendation(
+        user_id=user_id,
+        primary_topic=primary_topic,  # type: ignore[arg-type]
+        topic_scores={k: round(v, 4) for k, v in profile.items()},
+        wallpaper_tags=mapped["wallpaper_tags"],  # type: ignore[arg-type]
+        music_mood=mapped["music_mood"],  # type: ignore[arg-type]
+        quote_style=mapped["quote_style"],  # type: ignore[arg-type]
+        vibe=vibe,  # type: ignore[arg-type]
+    )
+
+
 @app.post("/ingest/page", response_model=IngestResponse)
 def ingest_page(
     payload: PageIngestRequest,
@@ -326,21 +345,7 @@ def recommend_context(
     user_id: str = "kumar",
     _: str = Depends(require_api_key),
 ) -> ContextRecommendation:
-    profile = get_weighted_profile(user_id)
-    primary_topic = "unknown"
-    if profile and max(profile.values()) > 0:
-        primary_topic = max(profile, key=profile.get)
-    vibe = get_latest_vibe(user_id)
-    mapped = recommendation_map(primary_topic, vibe)
-    return ContextRecommendation(
-        user_id=user_id,
-        primary_topic=primary_topic,  # type: ignore[arg-type]
-        topic_scores={k: round(v, 4) for k, v in profile.items()},
-        wallpaper_tags=mapped["wallpaper_tags"],  # type: ignore[arg-type]
-        music_mood=mapped["music_mood"],  # type: ignore[arg-type]
-        quote_style=mapped["quote_style"],  # type: ignore[arg-type]
-        vibe=vibe,  # type: ignore[arg-type]
-    )
+    return build_context_recommendation(user_id)
 
 
 @app.post("/feedback")
@@ -373,3 +378,17 @@ def me_recent_events(
 ) -> RecentEventsResponse:
     events = get_recent_events(user_id, limit)
     return RecentEventsResponse(user_id=user_id, events=events)
+
+
+@app.get("/me/dashboard", response_model=DashboardResponse)
+def me_dashboard(
+    user_id: str = "kumar",
+    limit: int = 24,
+    _: str = Depends(require_api_key),
+) -> DashboardResponse:
+    return DashboardResponse(
+        user_id=user_id,
+        recommendation=build_context_recommendation(user_id),
+        events=get_recent_events(user_id, limit),
+        sources=get_user_sources(user_id),
+    )

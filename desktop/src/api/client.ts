@@ -1,4 +1,4 @@
-import type { RecentEvent, Recommendation, Settings, SourcesResponse, Topic } from "../types";
+import type { DashboardResponse, RecentEvent, Recommendation, Settings, SourcesResponse, Topic } from "../types";
 
 async function request<T>(settings: Settings, path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${settings.backendUrl.replace(/\/$/, "")}${path}`, {
@@ -34,6 +34,10 @@ export async function getSources(settings: Settings): Promise<SourcesResponse> {
   return request(settings, `/me/sources?user_id=${encodeURIComponent(settings.userId)}`);
 }
 
+export async function getDashboard(settings: Settings, limit = 24): Promise<DashboardResponse> {
+  return request(settings, `/me/dashboard?user_id=${encodeURIComponent(settings.userId)}&limit=${limit}`);
+}
+
 export async function sendFeedback(settings: Settings, topic: Topic, action: "like" | "skip"): Promise<void> {
   await request(settings, "/feedback", {
     method: "POST",
@@ -46,16 +50,11 @@ export async function sendFeedback(settings: Settings, topic: Topic, action: "li
 }
 
 export async function loadDashboard(settings: Settings) {
-  await getHealth(settings);
-  const [recommendation, recent, sources] = await Promise.all([
-    getRecommendation(settings),
-    getRecentEvents(settings),
-    getSources(settings)
-  ]);
+  const dashboard = await getDashboard(settings);
 
   return {
-    recommendation,
-    events: recent.events,
-    sources: sources.sources
+    recommendation: dashboard.recommendation,
+    events: dashboard.events,
+    sources: dashboard.sources
   };
 }

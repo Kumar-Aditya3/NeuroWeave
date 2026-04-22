@@ -71,6 +71,13 @@ export type DashboardData = {
   error?: string;
 };
 
+export type DashboardResponse = {
+  user_id: string;
+  recommendation: Recommendation;
+  events: RecentEvent[];
+  sources: SourcesResponse["sources"];
+};
+
 declare global {
   interface Window {
     neuroWeaveSettings: {

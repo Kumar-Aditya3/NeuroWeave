@@ -15,6 +15,7 @@ Current focus is desktop-first and opt-in: ingest user-approved content signals,
 - Feedback capture via `POST /feedback` (`keep`, `skip`, `like`)
 - Source visibility via `GET /me/sources`
 - Recent activity debugging via `GET /me/recent-events`
+- Dashboard aggregation via `GET /me/dashboard`
 
 ### Content Understanding
 

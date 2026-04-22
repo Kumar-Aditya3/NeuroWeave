@@ -112,3 +112,10 @@ class RecentEvent(BaseModel):
 class RecentEventsResponse(BaseModel):
     user_id: str
     events: list[RecentEvent]
+
+
+class DashboardResponse(BaseModel):
+    user_id: str
+    recommendation: ContextRecommendation
+    events: list[RecentEvent]
+    sources: list[SourceDevice]
