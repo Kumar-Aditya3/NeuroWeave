@@ -3,3 +3,9 @@ __pycache__/
 .venv/
 backend/data.db
 agent/config.local.json
+desktop/node_modules/
+desktop/dist/
+desktop/dist-electron/
+desktop/dist-renderer/
+desktop/release/
+desktop/*.tsbuildinfo
