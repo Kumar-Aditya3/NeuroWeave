@@ -10,6 +10,8 @@ CREATE TABLE IF NOT EXISTS events (
     selected_text TEXT,
     content_text TEXT,
     topic_scores_json TEXT NOT NULL,
+    embedding_json TEXT,
+    classifier_mode TEXT,
     sentiment TEXT NOT NULL,
     vibe TEXT NOT NULL,
     created_at TEXT NOT NULL,

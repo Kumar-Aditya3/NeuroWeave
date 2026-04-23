@@ -1,6 +1,5 @@
 from datetime import datetime, timezone
 from hashlib import sha256
-import re
 from typing import Dict
 
 from fastapi import Depends, FastAPI
@@ -10,6 +9,7 @@ from .db import (
     create_event,
     create_feedback,
     get_latest_vibe,
+    get_recent_event_payloads,
     get_recent_events,
     get_user_sources,
     get_weighted_profile,
@@ -18,6 +18,7 @@ from .db import (
     update_profiles,
     utc_now_iso,
 )
+from .ml import classify_text
 from .models import (
     ActivityIngestRequest,
     ContextRecommendation,
@@ -30,6 +31,7 @@ from .models import (
     RecentEventsResponse,
     SourcesResponse,
 )
+from .wallpapers import build_wallpaper_payload
 
 TOPIC_KEYWORDS = {
     "tech": ["python", "fastapi", "ml", "ai", "code", "programming", "software"],
@@ -55,52 +57,7 @@ TOPIC_KEYWORDS = {
     "news": ["news", "breaking", "update", "world", "politics", "economy"],
     "unknown": [],
 }
-
-POSITIVE_WORDS = {"calm", "happy", "growth", "focus", "hope", "progress", "joy"}
-NEGATIVE_WORDS = {"angry", "sad", "dark", "stress", "anxiety", "doom", "rage"}
 DEDUPE_BUCKET_SECONDS = 300
-
-
-def classify_text(text: str) -> Dict[str, object]:
-    lowered = text.lower()
-    topic_scores: Dict[str, float] = {}
-    for topic, keywords in TOPIC_KEYWORDS.items():
-        matches = sum(count_keyword_matches(lowered, word) for word in keywords)
-        topic_scores[topic] = float(matches)
-
-    total = sum(topic_scores.values())
-    if total > 0:
-        topic_scores = {k: round(v / total, 4) for k, v in topic_scores.items()}
-    else:
-        topic_scores = {k: 0.0 for k in TOPIC_KEYWORDS.keys()}
-        topic_scores["unknown"] = 1.0
-
-    positive_hits = sum(lowered.count(word) for word in POSITIVE_WORDS)
-    negative_hits = sum(lowered.count(word) for word in NEGATIVE_WORDS)
-
-    if positive_hits > negative_hits:
-        sentiment = "positive"
-    elif negative_hits > positive_hits:
-        sentiment = "negative"
-    else:
-        sentiment = "neutral"
-
-    if negative_hits >= 2:
-        vibe = "dark"
-    elif positive_hits >= 2:
-        vibe = "calm"
-    elif "intense" in lowered or "binge" in lowered:
-        vibe = "intense"
-    else:
-        vibe = "balanced"
-
-    return {"topic_scores": topic_scores, "sentiment": sentiment, "vibe": vibe}
-
-
-def count_keyword_matches(text: str, keyword: str) -> int:
-    escaped = re.escape(keyword.lower())
-    pattern = rf"(?<!\w){escaped}(?!\w)"
-    return len(re.findall(pattern, text))
 
 
 def recommendation_map(primary_topic: str, vibe: str) -> Dict[str, object]:
@@ -176,21 +133,67 @@ def health() -> HealthResponse:
     return HealthResponse(status="ok")
 
 
-def build_context_recommendation(user_id: str) -> ContextRecommendation:
+def build_context_recommendation(
+    user_id: str,
+    classifier_mode: str = "embedding_primary",
+    recommendation_intensity: str = "balanced",
+    wallpaper_style: str = "minimal",
+) -> ContextRecommendation:
+    recent_payloads = get_recent_event_payloads(user_id, limit=48)
     profile = get_weighted_profile(user_id)
+    if recent_payloads:
+        recency_weighted: Dict[str, float] = {topic: 0.0 for topic in TOPIC_KEYWORDS.keys()}
+        vibe_weighted: Dict[str, float] = {"calm": 0.0, "balanced": 0.0, "intense": 0.0, "dark": 0.0}
+        reason_parts: list[str] = []
+        for index, payload in enumerate(recent_payloads):
+            weight = max(0.18, 1.0 - (index * 0.03))
+            text_blob = " ".join(
+                [
+                    payload["title"],
+                    payload["url"],
+                    payload["selected_text"],
+                    payload["content_text"],
+                    payload["source"],
+                    payload["event_type"],
+                ]
+            )
+            analysis = classify_text(text_blob, classifier_mode=classifier_mode)
+            for topic, score in analysis["topic_scores"].items():
+                recency_weighted[topic] += float(score) * weight
+            vibe_weighted[str(analysis["vibe"])] += weight
+            if index < 3:
+                top_topic = max(analysis["topic_scores"], key=analysis["topic_scores"].get)
+                reason_parts.append(f"{payload['title'][:44]} -> {top_topic}")
+
+        total = sum(recency_weighted.values()) or 1.0
+        profile = {topic: round(value / total, 4) for topic, value in recency_weighted.items()}
+        vibe = max(vibe_weighted, key=vibe_weighted.get)
+        explanation = "Recent signals: " + "; ".join(reason_parts) if reason_parts else "Recent signals are still warming up."
+    else:
+        vibe = get_latest_vibe(user_id)
+        explanation = "Using historical profile because recent events are sparse."
+
     primary_topic = "unknown"
     if profile and max(profile.values()) > 0:
         primary_topic = max(profile, key=profile.get)
-    vibe = get_latest_vibe(user_id)
     mapped = recommendation_map(primary_topic, vibe)
+    wallpaper = build_wallpaper_payload(primary_topic, vibe, recommendation_intensity, wallpaper_style)
     return ContextRecommendation(
         user_id=user_id,
         primary_topic=primary_topic,  # type: ignore[arg-type]
         topic_scores={k: round(v, 4) for k, v in profile.items()},
         wallpaper_tags=mapped["wallpaper_tags"],  # type: ignore[arg-type]
+        wallpaper_query=wallpaper["wallpaper_query"],
+        wallpaper_preview_url=wallpaper["wallpaper_preview_url"],
+        wallpaper_palette=wallpaper["wallpaper_palette"],
+        wallpaper_source=wallpaper["wallpaper_source"],
+        wallpaper_cached_path=wallpaper["wallpaper_cached_path"],
+        wallpaper_alternates=wallpaper["wallpaper_alternates"],
         music_mood=mapped["music_mood"],  # type: ignore[arg-type]
         quote_style=mapped["quote_style"],  # type: ignore[arg-type]
         vibe=vibe,  # type: ignore[arg-type]
+        classifier_mode=classifier_mode,
+        explanation=explanation,
     )
 
 
@@ -206,7 +209,7 @@ def ingest_page(
             payload.selected_text or "",
         ]
     )
-    analysis = classify_text(text_blob)
+    analysis = classify_text(text_blob, classifier_mode="embedding_primary")
     created_at = normalize_created_at(payload.timestamp)
     dedupe_key = dedupe_key_for(
         user_id=payload.user_id,
@@ -227,6 +230,8 @@ def ingest_page(
         selected_text=payload.selected_text,
         content_text=text_blob,
         topic_scores=analysis["topic_scores"],
+        embedding_json=str(analysis.get("embedding_preview")),
+        classifier_mode=str(analysis.get("classifier_mode", "embedding_primary")),
         sentiment=analysis["sentiment"],
         vibe=analysis["vibe"],
         created_at=created_at,
@@ -242,6 +247,7 @@ def ingest_page(
         topic_scores=analysis["topic_scores"],
         sentiment=analysis["sentiment"],
         vibe=analysis["vibe"],
+        classifier_mode=str(analysis.get("classifier_mode", "embedding_primary")),
     )
 
 
@@ -251,7 +257,7 @@ def ingest_pdf(
     _: str = Depends(require_api_key),
 ) -> IngestResponse:
     text_blob = f"{payload.filename}\n{payload.text}"
-    analysis = classify_text(text_blob)
+    analysis = classify_text(text_blob, classifier_mode="embedding_primary")
     created_at = normalize_created_at(payload.timestamp)
     dedupe_key = dedupe_key_for(
         user_id=payload.user_id,
@@ -271,6 +277,8 @@ def ingest_pdf(
         selected_text=None,
         content_text=payload.text,
         topic_scores=analysis["topic_scores"],
+        embedding_json=str(analysis.get("embedding_preview")),
+        classifier_mode=str(analysis.get("classifier_mode", "embedding_primary")),
         sentiment=analysis["sentiment"],
         vibe=analysis["vibe"],
         created_at=created_at,
@@ -285,6 +293,7 @@ def ingest_pdf(
         topic_scores=analysis["topic_scores"],
         sentiment=analysis["sentiment"],
         vibe=analysis["vibe"],
+        classifier_mode=str(analysis.get("classifier_mode", "embedding_primary")),
     )
 
 
@@ -303,7 +312,7 @@ def ingest_activity(
             payload.content_text or "",
         ]
     )
-    analysis = classify_text(text_blob)
+    analysis = classify_text(text_blob, classifier_mode="embedding_primary")
     created_at = normalize_created_at(payload.timestamp)
     dedupe_key = dedupe_key_for(
         user_id=payload.user_id,
@@ -323,6 +332,8 @@ def ingest_activity(
         selected_text=payload.selected_text,
         content_text=text_blob,
         topic_scores=analysis["topic_scores"],
+        embedding_json=str(analysis.get("embedding_preview")),
+        classifier_mode=str(analysis.get("classifier_mode", "embedding_primary")),
         sentiment=analysis["sentiment"],
         vibe=analysis["vibe"],
         created_at=created_at,
@@ -337,15 +348,24 @@ def ingest_activity(
         topic_scores=analysis["topic_scores"],
         sentiment=analysis["sentiment"],
         vibe=analysis["vibe"],
+        classifier_mode=str(analysis.get("classifier_mode", "embedding_primary")),
     )
 
 
 @app.get("/recommend/context", response_model=ContextRecommendation)
 def recommend_context(
     user_id: str = "kumar",
+    classifier_mode: str = "embedding_primary",
+    recommendation_intensity: str = "balanced",
+    wallpaper_style: str = "minimal",
     _: str = Depends(require_api_key),
 ) -> ContextRecommendation:
-    return build_context_recommendation(user_id)
+    return build_context_recommendation(
+        user_id,
+        classifier_mode=classifier_mode,
+        recommendation_intensity=recommendation_intensity,
+        wallpaper_style=wallpaper_style,
+    )
 
 
 @app.post("/feedback")
@@ -384,11 +404,19 @@ def me_recent_events(
 def me_dashboard(
     user_id: str = "kumar",
     limit: int = 24,
+    classifier_mode: str = "embedding_primary",
+    recommendation_intensity: str = "balanced",
+    wallpaper_style: str = "minimal",
     _: str = Depends(require_api_key),
 ) -> DashboardResponse:
     return DashboardResponse(
         user_id=user_id,
-        recommendation=build_context_recommendation(user_id),
+        recommendation=build_context_recommendation(
+            user_id,
+            classifier_mode=classifier_mode,
+            recommendation_intensity=recommendation_intensity,
+            wallpaper_style=wallpaper_style,
+        ),
         events=get_recent_events(user_id, limit),
         sources=get_user_sources(user_id),
     )

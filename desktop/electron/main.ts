@@ -5,6 +5,8 @@ import path from "node:path";
 type ConsoleDensity = "comfortable" | "compact";
 type ThemeMode = "dark" | "light";
 type Intensity = "calm" | "balanced" | "strong";
+type ClassifierMode = "embedding_primary" | "keyword_fallback";
+type WallpaperStyle = "minimal" | "cinematic" | "warm" | "neon" | "editorial";
 
 type Settings = {
   backendUrl: string;
@@ -14,6 +16,8 @@ type Settings = {
   themeMode: ThemeMode;
   consoleDensity: ConsoleDensity;
   recommendationIntensity: Intensity;
+  classifierMode: ClassifierMode;
+  wallpaperStyle: WallpaperStyle;
   topicWeights: Record<string, number>;
   privacy: {
     showBrowser: boolean;
@@ -30,6 +34,8 @@ const defaults: Settings = {
   themeMode: "dark",
   consoleDensity: "comfortable",
   recommendationIntensity: "balanced",
+  classifierMode: "embedding_primary",
+  wallpaperStyle: "minimal",
   topicWeights: {
     tech: 50,
     education: 50,

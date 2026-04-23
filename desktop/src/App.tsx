@@ -1,19 +1,23 @@
 import {
   Activity,
   AlertTriangle,
+  Brain,
   CheckCircle2,
+  Clapperboard,
   Gauge,
   HardDrive,
   Heart,
+  ImagePlus,
   LayoutDashboard,
   MonitorSmartphone,
+  MoonStar,
   Music2,
   RefreshCcw,
   Settings as SettingsIcon,
   SlidersHorizontal,
   Sparkles,
   Wallpaper,
-  XCircle
+  XCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { loadDashboard, sendFeedback } from "./api/client";
@@ -24,7 +28,7 @@ const navItems = [
   { id: "activity", label: "Activity", icon: Activity },
   { id: "devices", label: "Devices", icon: MonitorSmartphone },
   { id: "tuning", label: "Tuning", icon: SlidersHorizontal },
-  { id: "settings", label: "Settings", icon: SettingsIcon }
+  { id: "settings", label: "Settings", icon: SettingsIcon },
 ] as const;
 
 const topicLabels: Record<Topic, string> = {
@@ -35,7 +39,7 @@ const topicLabels: Record<Topic, string> = {
   philosophy: "Philosophy",
   "self-help": "Self-help",
   news: "News",
-  unknown: "Unknown"
+  unknown: "Unknown",
 };
 
 function App() {
@@ -46,7 +50,7 @@ function App() {
     lastSync: null,
     recommendation: null,
     events: [],
-    sources: []
+    sources: [],
   });
   const [feedbackState, setFeedbackState] = useState("");
 
@@ -59,13 +63,13 @@ function App() {
         lastSync: new Date().toLocaleTimeString(),
         recommendation: data.recommendation,
         events: data.events,
-        sources: data.sources
+        sources: data.sources,
       });
     } catch (error) {
       setDashboard((current) => ({
         ...current,
         online: false,
-        error: error instanceof Error ? error.message : "Backend unreachable"
+        error: error instanceof Error ? error.message : "Backend unreachable",
       }));
     }
   }, [settings]);
@@ -164,34 +168,73 @@ function App() {
 
         {activeView === "overview" && (
           <section className="view overview">
-            <div className="heroPanel">
-              <div>
-                <span className="eyebrow">Current signal</span>
-                <h1>{topicLabels[primaryTopic]} / {vibe}</h1>
-                <p>
-                  Chosen from recent activity, device signals, and your current recommendation profile.
-                </p>
-              </div>
-              <div className={`vibeBadge ${vibe}`}>{vibe}</div>
+            <div className="stateStrip">
+              <StatePill icon={Brain} label="Model" value={recommendation?.classifier_mode ?? settings.classifierMode} />
+              <StatePill icon={Gauge} label="Topic" value={topicLabels[primaryTopic]} />
+              <StatePill icon={MoonStar} label="Vibe" value={vibe} />
+              <StatePill icon={Wallpaper} label="Style" value={settings.wallpaperStyle} />
             </div>
 
-            <div className="grid three">
-              <InsightCard icon={Wallpaper} label="Wallpaper" value={recommendation?.wallpaper_tags.join(", ") ?? "Waiting"} />
-              <InsightCard icon={Music2} label="Music mood" value={recommendation?.music_mood ?? "Waiting"} />
-              <InsightCard icon={Sparkles} label="Quote style" value={recommendation?.quote_style ?? "Waiting"} />
+            <div className="grid heroGrid">
+              <section className="heroPanel wallpaperPanel">
+                <div className="wallpaperPreview">
+                  {recommendation?.wallpaper_preview_url ? (
+                    <img alt="Wallpaper preview" src={recommendation.wallpaper_preview_url} />
+                  ) : (
+                    <div className="placeholderVisual">
+                      <Wallpaper size={30} />
+                      <span>Waiting for wallpaper suggestion</span>
+                    </div>
+                  )}
+                </div>
+                <div className="wallpaperMeta">
+                  <div>
+                    <span className="eyebrow">Wallpaper mood</span>
+                    <h1>{topicLabels[primaryTopic]} / {vibe}</h1>
+                    <p>{recommendation?.wallpaper_query ?? "Building an aesthetic from your recent activity."}</p>
+                  </div>
+                  <div className="paletteRow">
+                    {(recommendation?.wallpaper_palette ?? []).map((color) => (
+                      <span className="swatch" key={color} style={{ background: color }} />
+                    ))}
+                  </div>
+                  <div className="altRow">
+                    {(recommendation?.wallpaper_alternates ?? []).slice(0, 3).map((item, index) => (
+                      <img alt={`Alternate wallpaper ${index + 1}`} key={item.preview_url} src={item.preview_url} />
+                    ))}
+                  </div>
+                  <div className="buttonRow">
+                    <button onClick={refresh} type="button">
+                      <ImagePlus size={16} /> Refresh aesthetic
+                    </button>
+                    <button disabled type="button">
+                      <Wallpaper size={16} /> Set as desktop
+                    </button>
+                  </div>
+                  <p className="sourceLine">Source: {recommendation?.wallpaper_source ?? "Curated feed"}</p>
+                </div>
+              </section>
+
+              <section className="panel recommendationBand">
+                <div className="panelHeader">
+                  <h2>Recommendation Band</h2>
+                  <Sparkles size={18} />
+                </div>
+                <div className="grid three">
+                  <InsightCard icon={Music2} label="Music mood" value={recommendation?.music_mood ?? "Waiting"} />
+                  <InsightCard icon={Sparkles} label="Quote style" value={recommendation?.quote_style ?? "Waiting"} />
+                  <InsightCard icon={Clapperboard} label="Wallpaper tags" value={recommendation?.wallpaper_tags.join(", ") ?? "Waiting"} />
+                </div>
+              </section>
             </div>
 
-            <div className="grid two">
+            <div className="grid explanationGrid">
               <section className="panel">
                 <div className="panelHeader">
                   <h2>Why this was chosen</h2>
-                  <Gauge size={18} />
+                  <Brain size={18} />
                 </div>
-                <p className="explain">
-                  NeuroWeave sees <strong>{topicLabels[primaryTopic]}</strong> as your strongest current topic and
-                  reads the latest vibe as <strong>{vibe}</strong>. The output is tuned to feel
-                  <strong> {settings.recommendationIntensity}</strong>.
-                </p>
+                <p className="explain">{recommendation?.explanation ?? "Reasoning will appear once the backend responds."}</p>
                 <div className="feedbackRow">
                   <button onClick={() => handleFeedback("like", "Marked as felt right")} type="button">
                     <Heart size={16} /> Felt right
@@ -204,18 +247,30 @@ function App() {
                   </button>
                 </div>
                 {feedbackState && <p className="success">{feedbackState}</p>}
+                {!dashboard.online && dashboard.error && <p className="error">{dashboard.error}</p>}
               </section>
+
               <EventList events={filteredEvents.slice(0, 8)} title="Latest activity" />
             </div>
           </section>
         )}
 
         {activeView === "activity" && <EventList events={filteredEvents} title="Activity stream" large />}
-        {activeView === "devices" && <Devices sources={dashboard.sources} />}
+        {activeView === "devices" && <Devices sources={dashboard.sources} events={filteredEvents} />}
         {activeView === "tuning" && <Tuning settings={settings} updateSettings={updateSettings} />}
         {activeView === "settings" && <SettingsView settings={settings} updateSettings={updateSettings} />}
       </main>
     </div>
+  );
+}
+
+function StatePill({ icon: Icon, label, value }: { icon: typeof Brain; label: string; value: string }) {
+  return (
+    <section className="statePill">
+      <Icon size={16} />
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </section>
   );
 }
 
@@ -242,7 +297,9 @@ function EventList({ events, title, large = false }: { events: RecentEvent[]; ti
           <article className="eventRow" key={event.id}>
             <div>
               <strong>{event.title ?? "Untitled event"}</strong>
-              <span>{event.client_name ?? "Unknown device"} / {event.event_type}</span>
+              <span>
+                {event.client_name ?? "Unknown device"} / {event.event_type} / {event.classifier_mode ?? "n/a"}
+              </span>
             </div>
             <time>{new Date(event.created_at).toLocaleTimeString()}</time>
           </article>
@@ -252,12 +309,23 @@ function EventList({ events, title, large = false }: { events: RecentEvent[]; ti
   );
 }
 
-function Devices({ sources }: { sources: DashboardData["sources"] }) {
+function Devices({ sources, events }: { sources: DashboardData["sources"]; events: RecentEvent[] }) {
+  const mix = {
+    browser: events.filter((event) => event.event_type === "browser_tab").length,
+    apps: events.filter((event) => ["active_window", "game"].includes(event.event_type)).length,
+    ocr: events.filter((event) => event.event_type === "ocr_text").length,
+  };
+
   return (
     <section className="panel largePanel">
       <div className="panelHeader">
         <h2>Devices</h2>
         <HardDrive size={18} />
+      </div>
+      <div className="mixRow">
+        <StatePill icon={Activity} label="Browser-heavy" value={String(mix.browser)} />
+        <StatePill icon={MonitorSmartphone} label="App-heavy" value={String(mix.apps)} />
+        <StatePill icon={Sparkles} label="OCR-active" value={String(mix.ocr)} />
       </div>
       <div className="deviceGrid">
         {sources.length === 0 && <p className="empty">No devices have checked in yet.</p>}
@@ -281,37 +349,76 @@ function Tuning({ settings, updateSettings }: { settings: Settings; updateSettin
         <h2>Tuning</h2>
         <SlidersHorizontal size={18} />
       </div>
-      <div className="settingsGrid">
-        <label>
-          Recommendation intensity
-          <select
-            value={settings.recommendationIntensity}
-            onChange={(event) => updateSettings({ recommendationIntensity: event.target.value as Settings["recommendationIntensity"] })}
-          >
-            <option value="calm">Calm</option>
-            <option value="balanced">Balanced</option>
-            <option value="strong">Strong</option>
-          </select>
-        </label>
-        {Object.entries(settings.topicWeights).map(([topic, value]) => (
-          <label className="sliderLabel" key={topic}>
-            <span>{topicLabels[topic as Topic]} weight: {value}</span>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={value}
-              onChange={(event) =>
-                updateSettings({
-                  topicWeights: {
-                    ...settings.topicWeights,
-                    [topic]: Number(event.target.value)
-                  }
-                })
-              }
-            />
+      <div className="tuningLayout">
+        <section className="subPanel">
+          <h3>Model</h3>
+          <label>
+            Classifier mode
+            <select
+              value={settings.classifierMode}
+              onChange={(event) => updateSettings({ classifierMode: event.target.value as Settings["classifierMode"] })}
+            >
+              <option value="embedding_primary">Embedding primary</option>
+              <option value="keyword_fallback">Keyword fallback</option>
+            </select>
           </label>
-        ))}
+          <label>
+            Recommendation intensity
+            <select
+              value={settings.recommendationIntensity}
+              onChange={(event) => updateSettings({ recommendationIntensity: event.target.value as Settings["recommendationIntensity"] })}
+            >
+              <option value="calm">Calm</option>
+              <option value="balanced">Balanced</option>
+              <option value="strong">Strong</option>
+            </select>
+          </label>
+        </section>
+
+        <section className="subPanel">
+          <h3>Wallpaper</h3>
+          <label>
+            Wallpaper style
+            <select
+              value={settings.wallpaperStyle}
+              onChange={(event) => updateSettings({ wallpaperStyle: event.target.value as Settings["wallpaperStyle"] })}
+            >
+              <option value="minimal">Minimal</option>
+              <option value="cinematic">Cinematic</option>
+              <option value="warm">Warm</option>
+              <option value="neon">Neon</option>
+              <option value="editorial">Editorial</option>
+            </select>
+          </label>
+          {Object.entries(settings.topicWeights).map(([topic, value]) => (
+            <label className="sliderLabel" key={topic}>
+              <span>{topicLabels[topic as Topic]} bias: {value}</span>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={value}
+                onChange={(event) =>
+                  updateSettings({
+                    topicWeights: {
+                      ...settings.topicWeights,
+                      [topic]: Number(event.target.value),
+                    },
+                  })
+                }
+              />
+            </label>
+          ))}
+        </section>
+
+        <section className="subPanel">
+          <h3>Privacy</h3>
+          <div className="toggleStack">
+            <Toggle label="Show browser activity" checked={settings.privacy.showBrowser} onChange={(value) => updateSettings({ privacy: { ...settings.privacy, showBrowser: value } })} />
+            <Toggle label="Show app/game activity" checked={settings.privacy.showApps} onChange={(value) => updateSettings({ privacy: { ...settings.privacy, showApps: value } })} />
+            <Toggle label="Show OCR activity" checked={settings.privacy.showOcr} onChange={(value) => updateSettings({ privacy: { ...settings.privacy, showOcr: value } })} />
+          </div>
+        </section>
       </div>
     </section>
   );
@@ -359,11 +466,13 @@ function SettingsView({ settings, updateSettings }: { settings: Settings; update
             <option value="compact">Compact</option>
           </select>
         </label>
-        <div className="toggleStack">
-          <Toggle label="Show browser activity" checked={settings.privacy.showBrowser} onChange={(value) => updateSettings({ privacy: { ...settings.privacy, showBrowser: value } })} />
-          <Toggle label="Show app/game activity" checked={settings.privacy.showApps} onChange={(value) => updateSettings({ privacy: { ...settings.privacy, showApps: value } })} />
-          <Toggle label="Show OCR activity" checked={settings.privacy.showOcr} onChange={(value) => updateSettings({ privacy: { ...settings.privacy, showOcr: value } })} />
-        </div>
+        <label>
+          Theme
+          <select value={settings.themeMode} onChange={(event) => updateSettings({ themeMode: event.target.value as Settings["themeMode"] })}>
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+          </select>
+        </label>
       </div>
     </section>
   );

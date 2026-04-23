@@ -2,6 +2,7 @@ __pycache__/
 *.py[cod]
 .venv/
 backend/data.db
+backend/wallpaper_cache/
 agent/config.local.json
 desktop/node_modules/
 desktop/dist/

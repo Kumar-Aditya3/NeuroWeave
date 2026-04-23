@@ -12,6 +12,8 @@ export type Vibe = "calm" | "balanced" | "intense" | "dark";
 export type ConsoleDensity = "comfortable" | "compact";
 export type ThemeMode = "dark" | "light";
 export type RecommendationIntensity = "calm" | "balanced" | "strong";
+export type ClassifierMode = "embedding_primary" | "keyword_fallback";
+export type WallpaperStyle = "minimal" | "cinematic" | "warm" | "neon" | "editorial";
 
 export type Settings = {
   backendUrl: string;
@@ -21,6 +23,8 @@ export type Settings = {
   themeMode: ThemeMode;
   consoleDensity: ConsoleDensity;
   recommendationIntensity: RecommendationIntensity;
+  classifierMode: ClassifierMode;
+  wallpaperStyle: WallpaperStyle;
   topicWeights: Record<Topic, number>;
   privacy: {
     showBrowser: boolean;
@@ -34,9 +38,21 @@ export type Recommendation = {
   primary_topic: Topic;
   topic_scores: Record<Topic, number>;
   wallpaper_tags: string[];
+  wallpaper_query: string;
+  wallpaper_preview_url: string;
+  wallpaper_palette: string[];
+  wallpaper_source: string;
+  wallpaper_cached_path?: string | null;
+  wallpaper_alternates: Array<{
+    preview_url: string;
+    cached_path?: string | null;
+    source: string;
+  }>;
   music_mood: string;
   quote_style: string;
   vibe: Vibe;
+  classifier_mode: ClassifierMode;
+  explanation: string;
 };
 
 export type RecentEvent = {
@@ -51,6 +67,7 @@ export type RecentEvent = {
   sentiment: "positive" | "neutral" | "negative";
   vibe: Vibe;
   created_at: string;
+  classifier_mode?: ClassifierMode | string | null;
 };
 
 export type SourcesResponse = {

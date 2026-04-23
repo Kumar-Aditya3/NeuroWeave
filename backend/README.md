@@ -22,6 +22,7 @@ Current focus is desktop-first and opt-in: ingest user-approved content signals,
 - Keyword-based topical scoring across:
   - `tech`, `education`, `anime`, `fitness`, `philosophy`, `self-help`, `news`, `unknown`
 - Unknown content is tracked as `unknown` instead of being forced into a topic.
+- Semantic anchor embeddings are now the primary classifier path, with keyword mode kept as a fallback/debug mode.
 - Basic sentiment detection (`positive`, `neutral`, `negative`)
 - Basic vibe detection (`calm`, `balanced`, `intense`, `dark`)
 
@@ -38,6 +39,7 @@ Current focus is desktop-first and opt-in: ingest user-approved content signals,
 ### Output Engine
 
 - Context recommendation endpoint: `GET /recommend/context`
+- Dashboard aggregation via `GET /me/dashboard` now carries wallpaper preview/query metadata
 - Rule-based mapping from dominant topic + latest vibe to:
   - wallpaper tags
   - music mood

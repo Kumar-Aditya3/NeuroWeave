@@ -51,6 +51,10 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE events ADD COLUMN client_name TEXT")
     if not _column_exists(conn, "events", "dedupe_key"):
         conn.execute("ALTER TABLE events ADD COLUMN dedupe_key TEXT")
+    if not _column_exists(conn, "events", "embedding_json"):
+        conn.execute("ALTER TABLE events ADD COLUMN embedding_json TEXT")
+    if not _column_exists(conn, "events", "classifier_mode"):
+        conn.execute("ALTER TABLE events ADD COLUMN classifier_mode TEXT")
     conn.execute(
         """
         CREATE UNIQUE INDEX IF NOT EXISTS idx_events_dedupe_key
@@ -72,6 +76,8 @@ def create_event(
     selected_text: str | None,
     content_text: str | None,
     topic_scores: Dict[str, float],
+    embedding_json: str | None,
+    classifier_mode: str | None,
     sentiment: str,
     vibe: str,
     created_at: str,
@@ -88,6 +94,8 @@ def create_event(
         "selected_text": selected_text,
         "content_text": content_text,
         "topic_scores_json": json.dumps(topic_scores),
+        "embedding_json": embedding_json,
+        "classifier_mode": classifier_mode,
         "sentiment": sentiment,
         "vibe": vibe,
         "created_at": created_at,
@@ -98,11 +106,11 @@ def create_event(
             """
             INSERT OR IGNORE INTO events (
                 user_id, device_id, client_name, source, event_type, url, title, selected_text,
-                content_text, topic_scores_json, sentiment, vibe, created_at, dedupe_key
+                content_text, topic_scores_json, embedding_json, classifier_mode, sentiment, vibe, created_at, dedupe_key
             )
             VALUES (
                 :user_id, :device_id, :client_name, :source, :event_type, :url, :title, :selected_text,
-                :content_text, :topic_scores_json, :sentiment, :vibe, :created_at, :dedupe_key
+                :content_text, :topic_scores_json, :embedding_json, :classifier_mode, :sentiment, :vibe, :created_at, :dedupe_key
             )
             """,
             payload,
@@ -272,7 +280,7 @@ def get_recent_events(user_id: str, limit: int = 20) -> list[dict]:
         rows = conn.execute(
             """
             SELECT id, user_id, device_id, client_name, source, event_type,
-                   url, title, sentiment, vibe, created_at
+                   url, title, sentiment, vibe, created_at, classifier_mode
             FROM events
             WHERE user_id = ?
             ORDER BY id DESC
@@ -293,6 +301,35 @@ def get_recent_events(user_id: str, limit: int = 20) -> list[dict]:
             "sentiment": str(row["sentiment"]),
             "vibe": str(row["vibe"]),
             "created_at": str(row["created_at"]),
+            "classifier_mode": row["classifier_mode"],
+        }
+        for row in rows
+    ]
+
+
+def get_recent_event_payloads(user_id: str, limit: int = 60) -> list[dict]:
+    safe_limit = max(1, min(limit, 200))
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, title, url, selected_text, content_text, source, event_type, created_at
+            FROM events
+            WHERE user_id = ?
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (user_id, safe_limit),
+        ).fetchall()
+    return [
+        {
+            "id": int(row["id"]),
+            "title": row["title"] or "",
+            "url": row["url"] or "",
+            "selected_text": row["selected_text"] or "",
+            "content_text": row["content_text"] or "",
+            "source": row["source"] or "",
+            "event_type": row["event_type"] or "",
+            "created_at": row["created_at"] or utc_now_iso(),
         }
         for row in rows
     ]

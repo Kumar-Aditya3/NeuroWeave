@@ -28,6 +28,11 @@ body {
   font-family: "Aptos", "Segoe UI", sans-serif;
 }
 
+img {
+  display: block;
+  max-width: 100%;
+}
+
 button,
 input,
 select {
@@ -174,6 +179,32 @@ nav button:hover,
   gap: 18px;
 }
 
+.stateStrip,
+.mixRow {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.statePill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(23, 26, 24, 0.92);
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+}
+
+.statePill span {
+  color: var(--muted);
+}
+
+.statePill strong {
+  margin-left: auto;
+}
+
 .heroPanel,
 .panel,
 .metricCard,
@@ -190,6 +221,79 @@ nav button:hover,
   justify-content: space-between;
   min-height: 172px;
   padding: 24px;
+}
+
+.heroGrid {
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
+}
+
+.wallpaperPanel {
+  display: grid;
+  grid-template-columns: minmax(360px, 1.1fr) minmax(0, 0.9fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.wallpaperPreview {
+  min-height: 330px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #111413;
+}
+
+.wallpaperPreview img,
+.altRow img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.wallpaperMeta {
+  display: grid;
+  gap: 14px;
+}
+
+.placeholderVisual {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.paletteRow,
+.buttonRow,
+.altRow {
+  display: flex;
+  gap: 10px;
+}
+
+.altRow img {
+  width: 92px;
+  height: 72px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+
+.swatch {
+  width: 34px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.sourceLine,
+.error {
+  color: var(--muted);
+}
+
+.error {
+  color: var(--bad);
+  margin-top: 10px;
+}
+
+.recommendationBand {
+  align-self: stretch;
 }
 
 h1,
@@ -249,6 +353,10 @@ h2 {
 
 .grid.two {
   grid-template-columns: minmax(0, 0.86fr) minmax(0, 1.14fr);
+}
+
+.explanationGrid {
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
 }
 
 .metricCard {
@@ -363,6 +471,26 @@ h2 {
   gap: 16px;
 }
 
+.tuningLayout {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.subPanel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #121514;
+  padding: 16px;
+  display: grid;
+  gap: 14px;
+}
+
+.subPanel h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
 label {
   display: grid;
   gap: 8px;
@@ -409,9 +537,18 @@ input[type="range"] {
     grid-template-columns: 210px 1fr;
   }
 
+  .stateStrip,
+  .mixRow,
+  .heroGrid,
+  .tuningLayout,
   .grid.three,
   .grid.two,
+  .explanationGrid,
   .settingsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .wallpaperPanel {
     grid-template-columns: 1fr;
   }
 }

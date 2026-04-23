@@ -47,6 +47,7 @@ class IngestResponse(BaseModel):
     topic_scores: Dict[str, float]
     sentiment: Sentiment
     vibe: Vibe
+    classifier_mode: str = "keyword_fallback"
 
 
 class ActivityIngestRequest(BaseModel):
@@ -69,9 +70,17 @@ class ContextRecommendation(BaseModel):
     primary_topic: Topic
     topic_scores: Dict[str, float]
     wallpaper_tags: list[str]
+    wallpaper_query: str
+    wallpaper_preview_url: str
+    wallpaper_palette: list[str]
+    wallpaper_source: str
+    wallpaper_cached_path: Optional[str] = None
+    wallpaper_alternates: list[dict] = Field(default_factory=list)
     music_mood: str
     quote_style: str
     vibe: Vibe
+    classifier_mode: str = "embedding_primary"
+    explanation: str = ""
 
 
 class FeedbackRequest(BaseModel):
@@ -107,6 +116,7 @@ class RecentEvent(BaseModel):
     sentiment: Sentiment
     vibe: Vibe
     created_at: str
+    classifier_mode: Optional[str] = None
 
 
 class RecentEventsResponse(BaseModel):
