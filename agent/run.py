@@ -43,6 +43,44 @@ def post_activity(config: dict, payload: dict) -> bool:
     return False
 
 
+def post_activity_cloud(config: dict, payload: dict) -> bool:
+    if not config.get("cloud_ingest_enabled"):
+        return False
+    ingest_url = (config.get("cloud_ingest_url") or "").strip()
+    if not ingest_url:
+        return False
+
+    body = json.dumps(payload).encode("utf-8")
+    headers = {
+        "Content-Type": "application/json",
+    }
+    if config.get("cloud_ingest_key"):
+        headers["X-Ingest-Key"] = str(config.get("cloud_ingest_key"))
+
+    request = Request(
+        ingest_url,
+        data=body,
+        method="POST",
+        headers=headers,
+    )
+    try:
+        with urlopen(request, timeout=8) as response:
+            return 200 <= response.status < 300
+    except HTTPError as error:
+        print(f"Cloud ingest rejected event: {error.code} {error.reason}")
+    except URLError as error:
+        print(f"Cloud ingest unreachable: {error.reason}")
+    except TimeoutError:
+        print("Cloud ingest request timed out")
+    return False
+
+
+def post_activity_with_fallback(config: dict, payload: dict) -> bool:
+    if post_activity(config, payload):
+        return True
+    return post_activity_cloud(config, payload)
+
+
 def build_activity_payload(config: dict, window: dict) -> dict | None:
     title = (window.get("title") or "").strip()
     process_name = (window.get("process_name") or "unknown").strip()
@@ -90,7 +128,7 @@ def maybe_send_ocr(config: dict, window: dict) -> None:
         "category": "ocr",
         "timestamp": now_iso(),
     }
-    post_activity(config, payload)
+    post_activity_with_fallback(config, payload)
 
 
 def main() -> None:
@@ -115,7 +153,7 @@ def main() -> None:
                     ]
                 )
                 if activity_key != last_activity_key:
-                    if post_activity(config, payload):
+                    if post_activity_with_fallback(config, payload):
                         print(f"Sent {payload['event_type']}: {payload['title']}")
                     last_activity_key = activity_key
                 maybe_send_ocr(config, window)

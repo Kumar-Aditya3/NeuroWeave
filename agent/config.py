@@ -18,6 +18,9 @@ DEFAULT_CONFIG = {
     "ocr_enabled": False,
     "ocr_mode": "active_window_only",
     "mobile_share_enabled": False,
+    "cloud_ingest_enabled": False,
+    "cloud_ingest_url": "",
+    "cloud_ingest_key": "",
 }
 
 

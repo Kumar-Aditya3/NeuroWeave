@@ -4,7 +4,10 @@ const DEFAULTS = {
   deviceId: "",
   clientName: "Browser",
   backendUrl: "http://127.0.0.1:8000",
-  apiKey: "dev-local-key"
+  apiKey: "dev-local-key",
+  cloudIngestEnabled: false,
+  cloudIngestUrl: "",
+  cloudIngestKey: ""
 };
 
 const blockedSchemes = ["chrome://", "opera://", "edge://", "about:", "file://"];
@@ -44,6 +47,7 @@ async function sendTabEvent(tab) {
     timestamp: new Date().toISOString()
   };
 
+  let backendOk = false;
   try {
     const response = await fetch(`${settings.backendUrl}/ingest/activity`, {
       method: "POST",
@@ -53,11 +57,38 @@ async function sendTabEvent(tab) {
       },
       body: JSON.stringify(payload)
     });
+    backendOk = response.ok;
     if (!response.ok) {
       console.warn("NeuroWeave ingest failed", response.status, await response.text());
     }
   } catch (error) {
     console.warn("NeuroWeave backend unreachable", error);
+  }
+
+  if (backendOk) {
+    return;
+  }
+  if (!settings.cloudIngestEnabled || !settings.cloudIngestUrl) {
+    return;
+  }
+
+  try {
+    const headers = {
+      "Content-Type": "application/json"
+    };
+    if (settings.cloudIngestKey) {
+      headers["X-Ingest-Key"] = settings.cloudIngestKey;
+    }
+    const response = await fetch(settings.cloudIngestUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload)
+    });
+    if (!response.ok) {
+      console.warn("Cloud ingest failed", response.status, await response.text());
+    }
+  } catch (error) {
+    console.warn("Cloud ingest unreachable", error);
   }
 }
 

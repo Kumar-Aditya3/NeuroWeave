@@ -36,6 +36,21 @@
         <input id="apiKey" type="password">
       </label>
 
+      <label class="switch">
+        <input id="cloudIngestEnabled" type="checkbox">
+        <span>Cloud fallback ingest</span>
+      </label>
+
+      <label>
+        Cloud ingest URL
+        <input id="cloudIngestUrl" type="url" placeholder="https://<project>.supabase.co/functions/v1/ingest-event">
+      </label>
+
+      <label>
+        Cloud ingest key
+        <input id="cloudIngestKey" type="password" placeholder="X-Ingest-Key">
+      </label>
+
       <p id="status"></p>
     </main>
     <script src="popup.js"></script>
