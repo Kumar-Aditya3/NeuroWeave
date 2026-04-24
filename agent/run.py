@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from .app_catalog import categorize_app
 from .config import load_config
 from .windows_capture import get_active_window, is_sensitive_title, ocr_active_window
 
@@ -50,8 +51,8 @@ def build_activity_payload(config: dict, window: dict) -> dict | None:
     if is_sensitive_title(title):
         return None
 
-    category = window.get("category", "active_window")
-    event_type = "game" if category == "game" else "active_window"
+    category, inferred_kind = categorize_app(process_name, title)
+    event_type = "game" if inferred_kind == "game" else "active_window"
     return {
         "user_id": config["user_id"],
         "device_id": config["device_id"],
@@ -108,6 +109,7 @@ def main() -> None:
                 activity_key = "|".join(
                     [
                         payload["event_type"],
+                        payload.get("category", ""),
                         payload["title"],
                         payload.get("process_name", ""),
                     ]

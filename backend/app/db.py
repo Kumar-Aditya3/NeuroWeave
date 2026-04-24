@@ -1,11 +1,12 @@
 import json
+import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Tuple
 
 ROOT = Path(__file__).resolve().parents[1]
-DB_PATH = ROOT / "data.db"
+DB_PATH = Path(os.getenv("NEUROWEAVE_DB_PATH", str(ROOT / "data.db")))
 SCHEMA_PATH = ROOT / "sql" / "schema.sql"
 
 TOPICS = [
@@ -49,6 +50,8 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE events ADD COLUMN device_id TEXT")
     if not _column_exists(conn, "events", "client_name"):
         conn.execute("ALTER TABLE events ADD COLUMN client_name TEXT")
+    if not _column_exists(conn, "events", "category"):
+        conn.execute("ALTER TABLE events ADD COLUMN category TEXT")
     if not _column_exists(conn, "events", "dedupe_key"):
         conn.execute("ALTER TABLE events ADD COLUMN dedupe_key TEXT")
     if not _column_exists(conn, "events", "embedding_json"):
@@ -62,6 +65,43 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         WHERE dedupe_key IS NOT NULL
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS arc_centroids (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            arc_name TEXT NOT NULL,
+            centroid_json TEXT NOT NULL,
+            sample_count REAL NOT NULL,
+            dominant_topic TEXT,
+            vibe TEXT,
+            strength REAL,
+            updated_at TEXT NOT NULL,
+            UNIQUE (user_id, arc_name)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS wallpaper_memory (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            topic TEXT NOT NULL,
+            vibe TEXT NOT NULL,
+            style TEXT NOT NULL,
+            provider TEXT NOT NULL,
+            wallpaper_query TEXT NOT NULL,
+            wallpaper_preview_url TEXT,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_wallpaper_memory_user_created
+        ON wallpaper_memory(user_id, created_at DESC)
+        """
+    )
 
 
 def create_event(
@@ -73,6 +113,7 @@ def create_event(
     event_type: str,
     url: str | None,
     title: str | None,
+    category: str | None,
     selected_text: str | None,
     content_text: str | None,
     topic_scores: Dict[str, float],
@@ -91,6 +132,7 @@ def create_event(
         "event_type": event_type,
         "url": url,
         "title": title,
+        "category": category,
         "selected_text": selected_text,
         "content_text": content_text,
         "topic_scores_json": json.dumps(topic_scores),
@@ -106,11 +148,11 @@ def create_event(
             """
             INSERT OR IGNORE INTO events (
                 user_id, device_id, client_name, source, event_type, url, title, selected_text,
-                content_text, topic_scores_json, embedding_json, classifier_mode, sentiment, vibe, created_at, dedupe_key
+                category, content_text, topic_scores_json, embedding_json, classifier_mode, sentiment, vibe, created_at, dedupe_key
             )
             VALUES (
                 :user_id, :device_id, :client_name, :source, :event_type, :url, :title, :selected_text,
-                :content_text, :topic_scores_json, :embedding_json, :classifier_mode, :sentiment, :vibe, :created_at, :dedupe_key
+                :category, :content_text, :topic_scores_json, :embedding_json, :classifier_mode, :sentiment, :vibe, :created_at, :dedupe_key
             )
             """,
             payload,
@@ -280,7 +322,7 @@ def get_recent_events(user_id: str, limit: int = 20) -> list[dict]:
         rows = conn.execute(
             """
             SELECT id, user_id, device_id, client_name, source, event_type,
-                   url, title, sentiment, vibe, created_at, classifier_mode
+                   url, title, category, sentiment, vibe, created_at, classifier_mode
             FROM events
             WHERE user_id = ?
             ORDER BY id DESC
@@ -298,6 +340,7 @@ def get_recent_events(user_id: str, limit: int = 20) -> list[dict]:
             "event_type": str(row["event_type"]),
             "url": row["url"],
             "title": row["title"],
+            "category": row["category"],
             "sentiment": str(row["sentiment"]),
             "vibe": str(row["vibe"]),
             "created_at": str(row["created_at"]),
@@ -312,7 +355,7 @@ def get_recent_event_payloads(user_id: str, limit: int = 60) -> list[dict]:
     with get_connection() as conn:
         rows = conn.execute(
             """
-            SELECT id, title, url, selected_text, content_text, source, event_type, created_at
+            SELECT id, title, url, category, selected_text, content_text, source, event_type, created_at
             FROM events
             WHERE user_id = ?
             ORDER BY id DESC
@@ -325,6 +368,7 @@ def get_recent_event_payloads(user_id: str, limit: int = 60) -> list[dict]:
             "id": int(row["id"]),
             "title": row["title"] or "",
             "url": row["url"] or "",
+            "category": row["category"] or "",
             "selected_text": row["selected_text"] or "",
             "content_text": row["content_text"] or "",
             "source": row["source"] or "",
@@ -333,3 +377,127 @@ def get_recent_event_payloads(user_id: str, limit: int = 60) -> list[dict]:
         }
         for row in rows
     ]
+
+
+def get_arc_centroids(user_id: str) -> dict[str, dict]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT arc_name, centroid_json, sample_count, dominant_topic, vibe, strength
+            FROM arc_centroids
+            WHERE user_id = ?
+            """,
+            (user_id,),
+        ).fetchall()
+
+    payload: dict[str, dict] = {}
+    for row in rows:
+        try:
+            centroid = json.loads(row["centroid_json"])
+            if not isinstance(centroid, list) or not centroid:
+                continue
+        except Exception:
+            continue
+        payload[str(row["arc_name"])] = {
+            "centroid": [float(value) for value in centroid],
+            "sample_count": float(row["sample_count"]),
+            "dominant_topic": row["dominant_topic"],
+            "vibe": row["vibe"],
+            "strength": float(row["strength"] or 0.0),
+        }
+    return payload
+
+
+def upsert_arc_centroids(user_id: str, centroid_updates: dict[str, dict]) -> None:
+    if not centroid_updates:
+        return
+
+    now = utc_now_iso()
+    with get_connection() as conn:
+        for arc_name, payload in centroid_updates.items():
+            conn.execute(
+                """
+                INSERT INTO arc_centroids (
+                    user_id, arc_name, centroid_json, sample_count, dominant_topic, vibe, strength, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(user_id, arc_name)
+                DO UPDATE SET
+                    centroid_json = excluded.centroid_json,
+                    sample_count = excluded.sample_count,
+                    dominant_topic = excluded.dominant_topic,
+                    vibe = excluded.vibe,
+                    strength = excluded.strength,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    user_id,
+                    arc_name,
+                    json.dumps(payload.get("centroid", [])),
+                    float(payload.get("sample_count", 0.0)),
+                    payload.get("dominant_topic"),
+                    payload.get("vibe"),
+                    float(payload.get("strength", 0.0)),
+                    now,
+                ),
+            )
+        conn.commit()
+
+
+def get_wallpaper_memory(user_id: str, limit: int = 36) -> list[dict]:
+    safe_limit = max(1, min(limit, 200))
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT topic, vibe, style, provider, wallpaper_query, wallpaper_preview_url, created_at
+            FROM wallpaper_memory
+            WHERE user_id = ?
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (user_id, safe_limit),
+        ).fetchall()
+    return [
+        {
+            "topic": str(row["topic"]),
+            "vibe": str(row["vibe"]),
+            "style": str(row["style"]),
+            "provider": str(row["provider"]),
+            "wallpaper_query": str(row["wallpaper_query"]),
+            "wallpaper_preview_url": row["wallpaper_preview_url"],
+            "created_at": str(row["created_at"]),
+        }
+        for row in rows
+    ]
+
+
+def create_wallpaper_memory(
+    *,
+    user_id: str,
+    topic: str,
+    vibe: str,
+    style: str,
+    provider: str,
+    wallpaper_query: str,
+    wallpaper_preview_url: str | None,
+) -> None:
+    with get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO wallpaper_memory (
+                user_id, topic, vibe, style, provider, wallpaper_query, wallpaper_preview_url, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                user_id,
+                topic,
+                vibe,
+                style,
+                provider,
+                wallpaper_query,
+                wallpaper_preview_url,
+                utc_now_iso(),
+            ),
+        )
+        conn.commit()

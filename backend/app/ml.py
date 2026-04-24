@@ -69,6 +69,14 @@ def _encode_text(text: str) -> list[float]:
     return [float(value) for value in vector]
 
 
+def encode_text(text: str) -> list[float]:
+    return _encode_text(text)
+
+
+def cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
+    return _cosine(left, right)
+
+
 def _score_anchors(text: str, anchors: Dict[str, Iterable[str]]) -> Dict[str, float]:
     encoded_text = _encode_text(text)
     scores: Dict[str, float] = {}

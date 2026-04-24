@@ -17,7 +17,16 @@ Topic = Literal[
 Sentiment = Literal["positive", "neutral", "negative"]
 Vibe = Literal["calm", "balanced", "intense", "dark"]
 FeedbackAction = Literal["keep", "skip", "like"]
-ActivitySource = Literal["browser_tab", "active_window", "game", "ocr_text", "manual"]
+ActivitySource = Literal[
+    "browser_tab",
+    "active_window",
+    "game",
+    "ocr_text",
+    "manual",
+    "mobile_share",
+    "mobile_app",
+    "mobile_media",
+]
 
 
 class PageIngestRequest(BaseModel):
@@ -74,6 +83,8 @@ class ContextRecommendation(BaseModel):
     wallpaper_preview_url: str
     wallpaper_palette: list[str]
     wallpaper_source: str
+    wallpaper_provider: str
+    wallpaper_rationale: str
     wallpaper_cached_path: Optional[str] = None
     wallpaper_alternates: list[dict] = Field(default_factory=list)
     music_mood: str
@@ -113,6 +124,7 @@ class RecentEvent(BaseModel):
     event_type: str
     url: Optional[str]
     title: Optional[str]
+    category: Optional[str] = None
     sentiment: Sentiment
     vibe: Vibe
     created_at: str
@@ -124,8 +136,27 @@ class RecentEventsResponse(BaseModel):
     events: list[RecentEvent]
 
 
+class CurrentArc(BaseModel):
+    name: str
+    strength: float
+    dominant_topic: Topic
+    vibe: Vibe
+    keywords: list[str]
+    sample_titles: list[str]
+
+
+class SourceMix(BaseModel):
+    browser: int
+    app: int
+    game: int
+    ocr: int
+    mobile: int
+
+
 class DashboardResponse(BaseModel):
     user_id: str
     recommendation: ContextRecommendation
     events: list[RecentEvent]
     sources: list[SourceDevice]
+    current_arcs: list[CurrentArc]
+    source_mix: SourceMix

@@ -16,7 +16,8 @@ DEFAULT_CONFIG = {
     "browser_enabled": False,
     "active_app_enabled": True,
     "ocr_enabled": False,
-    "ocr_mode": "active_window_only"
+    "ocr_mode": "active_window_only",
+    "mobile_share_enabled": False,
 }
 
 

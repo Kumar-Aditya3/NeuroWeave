@@ -40,7 +40,8 @@ export async function getDashboard(settings: Settings, limit = 24): Promise<Dash
     `/me/dashboard?user_id=${encodeURIComponent(settings.userId)}&limit=${limit}` +
       `&classifier_mode=${encodeURIComponent(settings.classifierMode)}` +
       `&recommendation_intensity=${encodeURIComponent(settings.recommendationIntensity)}` +
-      `&wallpaper_style=${encodeURIComponent(settings.wallpaperStyle)}`
+      `&wallpaper_style=${encodeURIComponent(settings.wallpaperStyle)}` +
+      `&wallpaper_provider=${encodeURIComponent(settings.wallpaperProvider)}`
   );
 }
 
@@ -61,6 +62,8 @@ export async function loadDashboard(settings: Settings) {
   return {
     recommendation: dashboard.recommendation,
     events: dashboard.events,
-    sources: dashboard.sources
+    sources: dashboard.sources,
+    currentArcs: dashboard.current_arcs,
+    sourceMix: dashboard.source_mix
   };
 }

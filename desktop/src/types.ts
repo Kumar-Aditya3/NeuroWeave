@@ -14,6 +14,7 @@ export type ThemeMode = "dark" | "light";
 export type RecommendationIntensity = "calm" | "balanced" | "strong";
 export type ClassifierMode = "embedding_primary" | "keyword_fallback";
 export type WallpaperStyle = "minimal" | "cinematic" | "warm" | "neon" | "editorial";
+export type WallpaperProvider = "curated_unsplash" | "generated_future";
 
 export type Settings = {
   backendUrl: string;
@@ -25,6 +26,7 @@ export type Settings = {
   recommendationIntensity: RecommendationIntensity;
   classifierMode: ClassifierMode;
   wallpaperStyle: WallpaperStyle;
+  wallpaperProvider: WallpaperProvider;
   topicWeights: Record<Topic, number>;
   privacy: {
     showBrowser: boolean;
@@ -42,6 +44,8 @@ export type Recommendation = {
   wallpaper_preview_url: string;
   wallpaper_palette: string[];
   wallpaper_source: string;
+  wallpaper_provider: WallpaperProvider;
+  wallpaper_rationale: string;
   wallpaper_cached_path?: string | null;
   wallpaper_alternates: Array<{
     preview_url: string;
@@ -64,10 +68,28 @@ export type RecentEvent = {
   event_type: string;
   url: string | null;
   title: string | null;
+  category?: string | null;
   sentiment: "positive" | "neutral" | "negative";
   vibe: Vibe;
   created_at: string;
   classifier_mode?: ClassifierMode | string | null;
+};
+
+export type CurrentArc = {
+  name: string;
+  strength: number;
+  dominant_topic: Topic;
+  vibe: Vibe;
+  keywords: string[];
+  sample_titles: string[];
+};
+
+export type SourceMix = {
+  browser: number;
+  app: number;
+  game: number;
+  ocr: number;
+  mobile: number;
 };
 
 export type SourcesResponse = {
@@ -85,6 +107,8 @@ export type DashboardData = {
   recommendation: Recommendation | null;
   events: RecentEvent[];
   sources: SourcesResponse["sources"];
+  currentArcs: CurrentArc[];
+  sourceMix: SourceMix;
   error?: string;
 };
 
@@ -93,6 +117,8 @@ export type DashboardResponse = {
   recommendation: Recommendation;
   events: RecentEvent[];
   sources: SourcesResponse["sources"];
+  current_arcs: CurrentArc[];
+  source_mix: SourceMix;
 };
 
 declare global {

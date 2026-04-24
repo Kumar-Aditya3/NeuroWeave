@@ -4,6 +4,7 @@ import {
   Brain,
   CheckCircle2,
   Clapperboard,
+  Compass,
   Gauge,
   HardDrive,
   Heart,
@@ -15,13 +16,14 @@ import {
   RefreshCcw,
   Settings as SettingsIcon,
   SlidersHorizontal,
+  Smartphone,
   Sparkles,
   Wallpaper,
   XCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { loadDashboard, sendFeedback } from "./api/client";
-import type { DashboardData, RecentEvent, Settings, Topic } from "./types";
+import type { CurrentArc, DashboardData, RecentEvent, Settings, SourceMix, Topic } from "./types";
 
 const navItems = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
@@ -51,6 +53,14 @@ function App() {
     recommendation: null,
     events: [],
     sources: [],
+    currentArcs: [],
+    sourceMix: {
+      browser: 0,
+      app: 0,
+      game: 0,
+      ocr: 0,
+      mobile: 0,
+    },
   });
   const [feedbackState, setFeedbackState] = useState("");
 
@@ -64,6 +74,8 @@ function App() {
         recommendation: data.recommendation,
         events: data.events,
         sources: data.sources,
+        currentArcs: data.currentArcs,
+        sourceMix: data.sourceMix,
       });
     } catch (error) {
       setDashboard((current) => ({
@@ -172,7 +184,7 @@ function App() {
               <StatePill icon={Brain} label="Model" value={recommendation?.classifier_mode ?? settings.classifierMode} />
               <StatePill icon={Gauge} label="Topic" value={topicLabels[primaryTopic]} />
               <StatePill icon={MoonStar} label="Vibe" value={vibe} />
-              <StatePill icon={Wallpaper} label="Style" value={settings.wallpaperStyle} />
+              <StatePill icon={Wallpaper} label="Provider" value={recommendation?.wallpaper_provider ?? settings.wallpaperProvider} />
             </div>
 
             <div className="grid heroGrid">
@@ -193,6 +205,10 @@ function App() {
                     <h1>{topicLabels[primaryTopic]} / {vibe}</h1>
                     <p>{recommendation?.wallpaper_query ?? "Building an aesthetic from your recent activity."}</p>
                   </div>
+                  <div className="rationaleBlock">
+                    <span className="eyebrow">Rationale</span>
+                    <p>{recommendation?.wallpaper_rationale ?? "Waiting for a semantic arc to form."}</p>
+                  </div>
                   <div className="paletteRow">
                     {(recommendation?.wallpaper_palette ?? []).map((color) => (
                       <span className="swatch" key={color} style={{ background: color }} />
@@ -211,7 +227,9 @@ function App() {
                       <Wallpaper size={16} /> Set as desktop
                     </button>
                   </div>
-                  <p className="sourceLine">Source: {recommendation?.wallpaper_source ?? "Curated feed"}</p>
+                  <p className="sourceLine">
+                    Provider: {recommendation?.wallpaper_provider ?? settings.wallpaperProvider} / Source: {recommendation?.wallpaper_source ?? "Curated feed"}
+                  </p>
                 </div>
               </section>
 
@@ -251,6 +269,11 @@ function App() {
               </section>
 
               <EventList events={filteredEvents.slice(0, 8)} title="Latest activity" />
+            </div>
+
+            <div className="grid lowerGrid">
+              <CurrentArcs arcs={dashboard.currentArcs} />
+              <SourceMixPanel mix={dashboard.sourceMix} />
             </div>
           </section>
         )}
@@ -298,7 +321,7 @@ function EventList({ events, title, large = false }: { events: RecentEvent[]; ti
             <div>
               <strong>{event.title ?? "Untitled event"}</strong>
               <span>
-                {event.client_name ?? "Unknown device"} / {event.event_type} / {event.classifier_mode ?? "n/a"}
+                {event.client_name ?? "Unknown device"} / {event.category ?? event.event_type} / {event.classifier_mode ?? "n/a"}
               </span>
             </div>
             <time>{new Date(event.created_at).toLocaleTimeString()}</time>
@@ -314,6 +337,7 @@ function Devices({ sources, events }: { sources: DashboardData["sources"]; event
     browser: events.filter((event) => event.event_type === "browser_tab").length,
     apps: events.filter((event) => ["active_window", "game"].includes(event.event_type)).length,
     ocr: events.filter((event) => event.event_type === "ocr_text").length,
+    mobile: events.filter((event) => event.source.startsWith("mobile_") || event.event_type.startsWith("mobile_")).length,
   };
 
   return (
@@ -326,6 +350,7 @@ function Devices({ sources, events }: { sources: DashboardData["sources"]; event
         <StatePill icon={Activity} label="Browser-heavy" value={String(mix.browser)} />
         <StatePill icon={MonitorSmartphone} label="App-heavy" value={String(mix.apps)} />
         <StatePill icon={Sparkles} label="OCR-active" value={String(mix.ocr)} />
+        <StatePill icon={Smartphone} label="Mobile" value={String(mix.mobile)} />
       </div>
       <div className="deviceGrid">
         {sources.length === 0 && <p className="empty">No devices have checked in yet.</p>}
@@ -390,6 +415,16 @@ function Tuning({ settings, updateSettings }: { settings: Settings; updateSettin
               <option value="editorial">Editorial</option>
             </select>
           </label>
+          <label>
+            Wallpaper provider
+            <select
+              value={settings.wallpaperProvider}
+              onChange={(event) => updateSettings({ wallpaperProvider: event.target.value as Settings["wallpaperProvider"] })}
+            >
+              <option value="curated_unsplash">Curated Unsplash</option>
+              <option value="generated_future">Generated future</option>
+            </select>
+          </label>
           {Object.entries(settings.topicWeights).map(([topic, value]) => (
             <label className="sliderLabel" key={topic}>
               <span>{topicLabels[topic as Topic]} bias: {value}</span>
@@ -419,6 +454,61 @@ function Tuning({ settings, updateSettings }: { settings: Settings; updateSettin
             <Toggle label="Show OCR activity" checked={settings.privacy.showOcr} onChange={(value) => updateSettings({ privacy: { ...settings.privacy, showOcr: value } })} />
           </div>
         </section>
+      </div>
+    </section>
+  );
+}
+
+function CurrentArcs({ arcs }: { arcs: CurrentArc[] }) {
+  return (
+    <section className="panel">
+      <div className="panelHeader">
+        <h2>Current Arcs</h2>
+        <Compass size={18} />
+      </div>
+      <div className="arcList">
+        {arcs.length === 0 && <p className="empty">Arcs will appear once your recent activity starts clustering.</p>}
+        {arcs.map((arc) => (
+          <article className="arcCard" key={arc.name}>
+            <div className="arcTop">
+              <strong>{arc.name}</strong>
+              <span>{arc.strength.toFixed(2)}</span>
+            </div>
+            <p>
+              {topicLabels[arc.dominant_topic]} / {arc.vibe}
+            </p>
+            <div className="chipRow">
+              {arc.keywords.map((keyword) => (
+                <span className="chip" key={keyword}>
+                  {keyword}
+                </span>
+              ))}
+            </div>
+            <ul className="sampleList">
+              {arc.sample_titles.map((title) => (
+                <li key={title}>{title}</li>
+              ))}
+            </ul>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function SourceMixPanel({ mix }: { mix: SourceMix }) {
+  return (
+    <section className="panel">
+      <div className="panelHeader">
+        <h2>Source Mix</h2>
+        <HardDrive size={18} />
+      </div>
+      <div className="mixGrid">
+        <InsightCard icon={Activity} label="Browser" value={String(mix.browser)} />
+        <InsightCard icon={MonitorSmartphone} label="Apps" value={String(mix.app)} />
+        <InsightCard icon={Clapperboard} label="Games" value={String(mix.game)} />
+        <InsightCard icon={Sparkles} label="OCR" value={String(mix.ocr)} />
+        <InsightCard icon={Smartphone} label="Mobile" value={String(mix.mobile)} />
       </div>
     </section>
   );

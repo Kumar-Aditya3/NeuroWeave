@@ -4,16 +4,21 @@ from typing import Dict
 
 from fastapi import Depends, FastAPI
 
+from .arcs import build_current_arcs
 from .auth import require_api_key
 from .db import (
+    create_wallpaper_memory,
     create_event,
     create_feedback,
+    get_arc_centroids,
     get_latest_vibe,
     get_recent_event_payloads,
     get_recent_events,
     get_user_sources,
+    get_wallpaper_memory,
     get_weighted_profile,
     init_db,
+    upsert_arc_centroids,
     upsert_device,
     update_profiles,
     utc_now_iso,
@@ -138,9 +143,14 @@ def build_context_recommendation(
     classifier_mode: str = "embedding_primary",
     recommendation_intensity: str = "balanced",
     wallpaper_style: str = "minimal",
+    wallpaper_provider: str = "curated_unsplash",
+    recent_payloads: list[dict] | None = None,
+    current_arcs: list[dict] | None = None,
 ) -> ContextRecommendation:
-    recent_payloads = get_recent_event_payloads(user_id, limit=48)
+    recent_payloads = recent_payloads if recent_payloads is not None else get_recent_event_payloads(user_id, limit=48)
     profile = get_weighted_profile(user_id)
+    if current_arcs is None:
+        current_arcs = get_adaptive_arcs(user_id, classifier_mode=classifier_mode, recent_payloads=recent_payloads)
     if recent_payloads:
         recency_weighted: Dict[str, float] = {topic: 0.0 for topic in TOPIC_KEYWORDS.keys()}
         vibe_weighted: Dict[str, float] = {"calm": 0.0, "balanced": 0.0, "intense": 0.0, "dark": 0.0}
@@ -177,7 +187,27 @@ def build_context_recommendation(
     if profile and max(profile.values()) > 0:
         primary_topic = max(profile, key=profile.get)
     mapped = recommendation_map(primary_topic, vibe)
-    wallpaper = build_wallpaper_payload(primary_topic, vibe, recommendation_intensity, wallpaper_style)
+    top_arc_name = current_arcs[0]["name"] if current_arcs else None
+    wallpaper = build_wallpaper_payload(
+        primary_topic,
+        vibe,
+        recommendation_intensity,
+        wallpaper_style,
+        provider=wallpaper_provider,
+        arc_name=top_arc_name,
+        recent_memory=get_wallpaper_memory(user_id, limit=36),
+    )
+    create_wallpaper_memory(
+        user_id=user_id,
+        topic=primary_topic,
+        vibe=vibe,
+        style=wallpaper_style,
+        provider=wallpaper["wallpaper_provider"],
+        wallpaper_query=wallpaper["wallpaper_query"],
+        wallpaper_preview_url=wallpaper.get("wallpaper_preview_url"),
+    )
+    if top_arc_name:
+        explanation = f"{explanation} Active arc: {top_arc_name}."
     return ContextRecommendation(
         user_id=user_id,
         primary_topic=primary_topic,  # type: ignore[arg-type]
@@ -187,6 +217,8 @@ def build_context_recommendation(
         wallpaper_preview_url=wallpaper["wallpaper_preview_url"],
         wallpaper_palette=wallpaper["wallpaper_palette"],
         wallpaper_source=wallpaper["wallpaper_source"],
+        wallpaper_provider=wallpaper["wallpaper_provider"],
+        wallpaper_rationale=wallpaper["wallpaper_rationale"],
         wallpaper_cached_path=wallpaper["wallpaper_cached_path"],
         wallpaper_alternates=wallpaper["wallpaper_alternates"],
         music_mood=mapped["music_mood"],  # type: ignore[arg-type]
@@ -195,6 +227,47 @@ def build_context_recommendation(
         classifier_mode=classifier_mode,
         explanation=explanation,
     )
+
+
+def build_source_mix(events: list[dict]) -> dict:
+    mix = {
+        "browser": 0,
+        "app": 0,
+        "game": 0,
+        "ocr": 0,
+        "mobile": 0,
+    }
+    for event in events:
+        event_type = event.get("event_type", "")
+        source = event.get("source", "")
+        if event_type == "browser_tab":
+            mix["browser"] += 1
+        elif event_type == "game":
+            mix["game"] += 1
+        elif event_type == "ocr_text":
+            mix["ocr"] += 1
+        elif source.startswith("mobile_") or event_type.startswith("mobile_"):
+            mix["mobile"] += 1
+        else:
+            mix["app"] += 1
+    return mix
+
+
+def get_adaptive_arcs(
+    user_id: str,
+    classifier_mode: str,
+    recent_payloads: list[dict] | None = None,
+) -> list[dict]:
+    payloads = recent_payloads if recent_payloads is not None else get_recent_event_payloads(user_id, limit=48)
+    stored_centroids = get_arc_centroids(user_id)
+    arcs, centroid_updates = build_current_arcs(
+        payloads,
+        classifier_mode=classifier_mode,
+        prior_centroids=stored_centroids,
+    )
+    if centroid_updates:
+        upsert_arc_centroids(user_id, centroid_updates)
+    return arcs
 
 
 @app.post("/ingest/page", response_model=IngestResponse)
@@ -227,6 +300,7 @@ def ingest_page(
         event_type="browser_tab",
         url=str(payload.url),
         title=payload.title,
+        category="browser",
         selected_text=payload.selected_text,
         content_text=text_blob,
         topic_scores=analysis["topic_scores"],
@@ -274,6 +348,7 @@ def ingest_pdf(
         event_type="pdf",
         url=None,
         title=payload.filename,
+        category="document",
         selected_text=None,
         content_text=payload.text,
         topic_scores=analysis["topic_scores"],
@@ -329,6 +404,7 @@ def ingest_activity(
         event_type=payload.event_type,
         url=str(payload.url) if payload.url else None,
         title=payload.title,
+        category=payload.category,
         selected_text=payload.selected_text,
         content_text=text_blob,
         topic_scores=analysis["topic_scores"],
@@ -358,6 +434,7 @@ def recommend_context(
     classifier_mode: str = "embedding_primary",
     recommendation_intensity: str = "balanced",
     wallpaper_style: str = "minimal",
+    wallpaper_provider: str = "curated_unsplash",
     _: str = Depends(require_api_key),
 ) -> ContextRecommendation:
     return build_context_recommendation(
@@ -365,6 +442,7 @@ def recommend_context(
         classifier_mode=classifier_mode,
         recommendation_intensity=recommendation_intensity,
         wallpaper_style=wallpaper_style,
+        wallpaper_provider=wallpaper_provider,
     )
 
 
@@ -407,8 +485,16 @@ def me_dashboard(
     classifier_mode: str = "embedding_primary",
     recommendation_intensity: str = "balanced",
     wallpaper_style: str = "minimal",
+    wallpaper_provider: str = "curated_unsplash",
     _: str = Depends(require_api_key),
 ) -> DashboardResponse:
+    recent_events = get_recent_events(user_id, limit)
+    recent_payloads = get_recent_event_payloads(user_id, limit=48)
+    current_arcs = get_adaptive_arcs(
+        user_id,
+        classifier_mode=classifier_mode,
+        recent_payloads=recent_payloads,
+    )
     return DashboardResponse(
         user_id=user_id,
         recommendation=build_context_recommendation(
@@ -416,7 +502,12 @@ def me_dashboard(
             classifier_mode=classifier_mode,
             recommendation_intensity=recommendation_intensity,
             wallpaper_style=wallpaper_style,
+            wallpaper_provider=wallpaper_provider,
+            recent_payloads=recent_payloads,
+            current_arcs=current_arcs,
         ),
-        events=get_recent_events(user_id, limit),
+        events=recent_events,
         sources=get_user_sources(user_id),
+        current_arcs=current_arcs,
+        source_mix=build_source_mix(recent_events),
     )
