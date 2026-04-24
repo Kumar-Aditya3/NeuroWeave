@@ -36,6 +36,7 @@ from .models import (
     RecentEventsResponse,
     SourcesResponse,
 )
+from .supabase_mirror import mirror_device, mirror_event, mirror_feedback
 from .wallpapers import build_wallpaper_payload
 
 TOPIC_KEYWORDS = {
@@ -312,6 +313,36 @@ def ingest_page(
         dedupe_key=dedupe_key,
     )
     upsert_device(payload.user_id, payload.device_id, payload.client_name)
+    mirror_device(
+        {
+            "user_id": payload.user_id,
+            "device_id": payload.device_id,
+            "client_name": payload.client_name,
+            "last_seen_at": created_at,
+        }
+    )
+    mirror_event(
+        {
+            "dedupe_key": dedupe_key,
+            "user_id": payload.user_id,
+            "device_id": payload.device_id,
+            "client_name": payload.client_name,
+            "source": "browser_tab",
+            "event_type": "browser_tab",
+            "url": str(payload.url),
+            "title": payload.title,
+            "category": "browser",
+            "selected_text": payload.selected_text,
+            "content_text": text_blob,
+            "topic_scores_json": analysis["topic_scores"],
+            "embedding_json": analysis.get("embedding_preview"),
+            "classifier_mode": str(analysis.get("classifier_mode", "embedding_primary")),
+            "sentiment": analysis["sentiment"],
+            "vibe": analysis["vibe"],
+            "created_at": created_at,
+            "received_at": utc_now_iso(),
+        }
+    )
     if not deduped:
         update_profiles(payload.user_id, analysis["topic_scores"])
 
@@ -360,6 +391,36 @@ def ingest_pdf(
         dedupe_key=dedupe_key,
     )
     upsert_device(payload.user_id, payload.device_id, payload.client_name)
+    mirror_device(
+        {
+            "user_id": payload.user_id,
+            "device_id": payload.device_id,
+            "client_name": payload.client_name,
+            "last_seen_at": created_at,
+        }
+    )
+    mirror_event(
+        {
+            "dedupe_key": dedupe_key,
+            "user_id": payload.user_id,
+            "device_id": payload.device_id,
+            "client_name": payload.client_name,
+            "source": payload.source,
+            "event_type": "pdf",
+            "url": None,
+            "title": payload.filename,
+            "category": "document",
+            "selected_text": None,
+            "content_text": payload.text,
+            "topic_scores_json": analysis["topic_scores"],
+            "embedding_json": analysis.get("embedding_preview"),
+            "classifier_mode": str(analysis.get("classifier_mode", "embedding_primary")),
+            "sentiment": analysis["sentiment"],
+            "vibe": analysis["vibe"],
+            "created_at": created_at,
+            "received_at": utc_now_iso(),
+        }
+    )
     if not deduped:
         update_profiles(payload.user_id, analysis["topic_scores"])
     return IngestResponse(
@@ -416,6 +477,37 @@ def ingest_activity(
         dedupe_key=dedupe_key,
     )
     upsert_device(payload.user_id, payload.device_id, payload.client_name)
+    mirror_device(
+        {
+            "user_id": payload.user_id,
+            "device_id": payload.device_id,
+            "client_name": payload.client_name,
+            "last_seen_at": created_at,
+        }
+    )
+    mirror_event(
+        {
+            "dedupe_key": dedupe_key,
+            "user_id": payload.user_id,
+            "device_id": payload.device_id,
+            "client_name": payload.client_name,
+            "source": payload.source,
+            "event_type": payload.event_type,
+            "url": str(payload.url) if payload.url else None,
+            "title": payload.title,
+            "category": payload.category,
+            "selected_text": payload.selected_text,
+            "content_text": text_blob,
+            "process_name": payload.process_name,
+            "topic_scores_json": analysis["topic_scores"],
+            "embedding_json": analysis.get("embedding_preview"),
+            "classifier_mode": str(analysis.get("classifier_mode", "embedding_primary")),
+            "sentiment": analysis["sentiment"],
+            "vibe": analysis["vibe"],
+            "created_at": created_at,
+            "received_at": utc_now_iso(),
+        }
+    )
     if not deduped:
         update_profiles(payload.user_id, analysis["topic_scores"])
     return IngestResponse(
@@ -455,6 +547,14 @@ def feedback(
         user_id=payload.user_id,
         recommendation_topic=payload.recommendation_topic,
         action=payload.action,
+    )
+    mirror_feedback(
+        {
+            "user_id": payload.user_id,
+            "recommendation_topic": payload.recommendation_topic,
+            "action": payload.action,
+            "created_at": utc_now_iso(),
+        }
     )
     return {"status": "accepted"}
 

@@ -2,6 +2,8 @@ __pycache__/
 *.py[cod]
 .venv/
 backend/data.db
+backend/.env.local
+backend/.env.*.local
 backend/wallpaper_cache/
 agent/config.local.json
 desktop/node_modules/

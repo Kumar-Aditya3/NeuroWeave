@@ -81,3 +81,42 @@ On first run it creates `agent/config.local.json` with a persistent `device_id`.
 - API: FastAPI
 - Data store: SQLite
 - Language: Python
+
+## Supabase Cloud Mirror (Optional)
+
+You can keep local SQLite for fast local reads while mirroring ingest data to Supabase.
+
+### 1) Create tables in Supabase
+
+Run [sql/supabase_bootstrap.sql](sql/supabase_bootstrap.sql) in the Supabase SQL editor.
+
+This creates:
+
+- `events_raw`
+- `devices_state`
+- `feedback_events`
+- `wallpaper_memory`
+- `arc_centroids`
+- retention function + daily `pg_cron` job
+
+### 2) Configure backend environment
+
+Copy [ .env.supabase.example ](.env.supabase.example) values into your runtime environment:
+
+- `NEUROWEAVE_SUPABASE_ENABLED=true`
+- `NEUROWEAVE_SUPABASE_URL=<your-project-url>`
+- `NEUROWEAVE_SUPABASE_SERVICE_ROLE_KEY=<service-role-key>`
+
+Use the Service Role key for backend server-to-server writes.
+Do not use the publishable/anon key for backend ingestion writes.
+
+### 3) Behavior
+
+When Supabase mirror is enabled, these endpoints also write to Supabase:
+
+- `POST /ingest/page`
+- `POST /ingest/pdf`
+- `POST /ingest/activity`
+- `POST /feedback`
+
+If Supabase credentials are missing or request fails, local SQLite ingestion still succeeds.
