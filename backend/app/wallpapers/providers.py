@@ -14,12 +14,12 @@ def curated_unsplash_provider(query: str, intensity: str, count: int = 3, seed_o
         seed = hashlib.sha256(f"{query}:{intensity}:{signature_index}".encode("utf-8")).hexdigest()[:8]
         # Unsplash Source is no longer reliable and can return an app error page.
         # Use a deterministic Picsum seed URL so the preview is always an image.
-        remote_url = f"https://picsum.photos/seed/{seed}-{encoded_query}/1600/900"
+        remote_url = f"https://picsum.photos/seed/{seed}-{encoded_query}/1920/1080"
         alternates.append(
             {
                 "preview_url": remote_url,
                 "cached_path": cache_image(remote_url, seed),
-                "source": "Picsum Seeded",
+                "source": "Picsum Seeded 16:9",
                 "provider": "curated_unsplash",
             }
         )

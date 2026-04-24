@@ -1,6 +1,11 @@
 import { app, BrowserWindow, ipcMain } from "electron";
+import { execFile } from "node:child_process";
 import fs from "node:fs";
+import http from "node:http";
+import https from "node:https";
+import os from "node:os";
 import path from "node:path";
+import { URL } from "node:url";
 
 type ConsoleDensity = "comfortable" | "compact";
 type ThemeMode = "dark" | "light";
@@ -98,6 +103,105 @@ function createWindow() {
     win.loadFile(path.join(__dirname, "../dist-renderer/index.html"));
   }
 }
+
+function downloadFile(url: string, destination: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const transport = parsed.protocol === "http:" ? http : https;
+
+    const request = transport.get(url, (response) => {
+      const status = response.statusCode ?? 0;
+      if ([301, 302, 303, 307, 308].includes(status)) {
+        const location = response.headers.location;
+        response.resume();
+        if (!location) {
+          reject(new Error("Wallpaper redirect missing location header"));
+          return;
+        }
+        const redirected = new URL(location, url).toString();
+        downloadFile(redirected, destination).then(resolve).catch(reject);
+        return;
+      }
+
+      if (status < 200 || status >= 300) {
+        response.resume();
+        reject(new Error(`Wallpaper download failed with status ${status}`));
+        return;
+      }
+
+      const file = fs.createWriteStream(destination);
+      response.pipe(file);
+      file.on("finish", () => {
+        file.close();
+        resolve();
+      });
+      file.on("error", (error) => {
+        file.close();
+        reject(error);
+      });
+    });
+
+    request.on("error", reject);
+  });
+}
+
+function setWindowsWallpaper(imagePath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const escapedPath = imagePath.replace(/'/g, "''");
+    const command = [
+      "$signature = @'",
+      "using System.Runtime.InteropServices;",
+      "public class NativeWallpaper {",
+      "  [DllImport(\"user32.dll\", SetLastError=true)]",
+      "  public static extern bool SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);",
+      "}",
+      "'@;",
+      "Add-Type $signature -ErrorAction SilentlyContinue;",
+      `$ok = [NativeWallpaper]::SystemParametersInfo(20, 0, '${escapedPath}', 3);`,
+      "if (-not $ok) { exit 1 }",
+    ].join(" ");
+
+    execFile(
+      "powershell.exe",
+      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command],
+      (error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve();
+      }
+    );
+  });
+}
+
+ipcMain.handle("wallpaper:set", async (_event, payload: { previewUrl?: string; cachedPath?: string | null }) => {
+  if (process.platform !== "win32") {
+    return { ok: false, message: "Setting wallpaper is currently supported on Windows only." };
+  }
+
+  try {
+    let localPath = "";
+    if (payload.cachedPath && fs.existsSync(payload.cachedPath)) {
+      localPath = payload.cachedPath;
+    } else if (payload.previewUrl) {
+      const tempDir = path.join(os.tmpdir(), "neuroweave");
+      fs.mkdirSync(tempDir, { recursive: true });
+      localPath = path.join(tempDir, "current_wallpaper.jpg");
+      await downloadFile(payload.previewUrl, localPath);
+    } else {
+      return { ok: false, message: "No wallpaper URL or cache path was provided." };
+    }
+
+    await setWindowsWallpaper(localPath);
+    return { ok: true, message: "Desktop wallpaper updated.", path: localPath };
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : "Failed to set wallpaper.",
+    };
+  }
+});
 
 ipcMain.handle("settings:get", () => readSettings());
 ipcMain.handle("settings:set", (_event, nextSettings: Partial<Settings>) => {

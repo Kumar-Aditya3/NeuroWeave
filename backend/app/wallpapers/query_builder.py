@@ -8,7 +8,7 @@ def build_wallpaper_query(topic: str, vibe: str, intensity: str, style: str, arc
     vibe_prompt = VIBE_BASE.get(vibe, VIBE_BASE["balanced"])
     style_prompt = WALLPAPER_STYLE_HINTS.get(style, WALLPAPER_STYLE_HINTS["minimal"])
     arc_fragment = f"{arc_name} " if arc_name else ""
-    wallpaper_query = f"{arc_fragment}{vibe_prompt} {topic_prompt} {style_prompt} desktop wallpaper"
+    wallpaper_query = f"{arc_fragment}{vibe_prompt} {topic_prompt} {style_prompt} desktop wallpaper landscape 16:9"
 
     return {
         "wallpaper_query": wallpaper_query,

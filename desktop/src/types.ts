@@ -121,11 +121,20 @@ export type DashboardResponse = {
   source_mix: SourceMix;
 };
 
+export type WallpaperSetResponse = {
+  ok: boolean;
+  message: string;
+  path?: string;
+};
+
 declare global {
   interface Window {
     neuroWeaveSettings: {
       get: () => Promise<Settings>;
       set: (settings: Partial<Settings>) => Promise<Settings>;
+    };
+    neuroWeaveDesktop: {
+      setWallpaper: (payload: { previewUrl?: string; cachedPath?: string | null }) => Promise<WallpaperSetResponse>;
     };
   }
 }

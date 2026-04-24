@@ -1,6 +1,6 @@
 # Supabase Direct Ingest Setup
 
-This folder contains an Edge Function that allows PC/mobile clients to ingest events directly into Supabase when the NeuroWeave backend is offline.
+This folder contains an Edge Function for direct event ingestion into Supabase when the NeuroWeave backend is offline.
 
 ## Edge Function
 
@@ -16,28 +16,49 @@ It expects:
 
 ## Deploy
 
-1. Install Supabase CLI and login.
-2. Link project:
+Use `npx supabase` to avoid PATH issues on Windows.
 
-```bash
-supabase link --project-ref xfffhfiefspczxhpeszu
+1. Create a Supabase personal access token in dashboard:
+
+- Account Settings -> Access Tokens -> Generate token
+
+2. Set token in shell:
+
+```powershell
+$env:SUPABASE_ACCESS_TOKEN = "replace_with_personal_access_token"
 ```
 
-3. Set function secret (shared by clients):
+3. Link project:
 
 ```bash
-supabase secrets set NEUROWEAVE_INGEST_KEY=replace_with_long_random_key
+npx supabase link --project-ref xfffhfiefspczxhpeszu
 ```
 
-4. Deploy function:
+4. Set function secret (shared by clients):
 
 ```bash
-supabase functions deploy ingest-event
+npx supabase secrets set NEUROWEAVE_INGEST_KEY=replace_with_long_random_key --project-ref xfffhfiefspczxhpeszu
+```
+
+5. Deploy function:
+
+```bash
+npx supabase functions deploy ingest-event --project-ref xfffhfiefspczxhpeszu
 ```
 
 Function URL:
 
 `https://xfffhfiefspczxhpeszu.supabase.co/functions/v1/ingest-event`
+
+6. Smoke test function:
+
+```powershell
+Invoke-RestMethod -Method Post `
+  -Uri "https://xfffhfiefspczxhpeszu.supabase.co/functions/v1/ingest-event" `
+  -Headers @{ "x-ingest-key" = "replace_with_long_random_key" } `
+  -ContentType "application/json" `
+  -Body '{"user_id":"kumar","device_id":"desktop-cli-test","client_name":"Desktop CLI Test","source":"active_window","event_type":"active_window","title":"CLI deploy smoke test","content_text":"supabase function invoke test"}'
+```
 
 ## Client Wiring
 
@@ -61,4 +82,4 @@ In popup settings:
 - Set `Cloud ingest URL`
 - Set `Cloud ingest key`
 
-The extension tries backend first, then cloud ingest fallback.
+The extension tries backend first, then falls back to cloud ingest.

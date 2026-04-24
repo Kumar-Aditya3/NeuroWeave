@@ -12,3 +12,11 @@ desktop/dist-electron/
 desktop/dist-renderer/
 desktop/release/
 desktop/*.tsbuildinfo
+build/
+dist/
+portable_agent/*.config.json
+portable_agent/*.queue.jsonl
+**/portable_agent.config.json
+**/portable_agent.queue.jsonl
+*.spec
+supabase/.temp/

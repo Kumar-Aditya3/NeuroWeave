@@ -63,6 +63,7 @@ function App() {
     },
   });
   const [feedbackState, setFeedbackState] = useState("");
+  const [wallpaperState, setWallpaperState] = useState("");
 
   const refresh = useCallback(async () => {
     if (!settings) return;
@@ -117,6 +118,20 @@ function App() {
     await sendFeedback(settings, dashboard.recommendation.primary_topic, action);
     setFeedbackState(label);
     setTimeout(() => setFeedbackState(""), 1600);
+  }
+
+  async function handleSetDesktop() {
+    if (!recommendation) return;
+    setWallpaperState("Applying wallpaper...");
+    try {
+      const response = await window.neuroWeaveDesktop.setWallpaper({
+        previewUrl: recommendation.wallpaper_preview_url,
+        cachedPath: recommendation.wallpaper_cached_path,
+      });
+      setWallpaperState(response.message);
+    } catch (error) {
+      setWallpaperState(error instanceof Error ? error.message : "Failed to set wallpaper.");
+    }
   }
 
   if (!settings) {
@@ -223,10 +238,15 @@ function App() {
                     <button onClick={refresh} type="button">
                       <ImagePlus size={16} /> Refresh aesthetic
                     </button>
-                    <button disabled type="button">
+                    <button
+                      onClick={handleSetDesktop}
+                      type="button"
+                      disabled={!recommendation?.wallpaper_preview_url && !recommendation?.wallpaper_cached_path}
+                    >
                       <Wallpaper size={16} /> Set as desktop
                     </button>
                   </div>
+                  {wallpaperState && <p className="success">{wallpaperState}</p>}
                   <p className="sourceLine">
                     Provider: {recommendation?.wallpaper_provider ?? settings.wallpaperProvider} / Source: {recommendation?.wallpaper_source ?? "Curated feed"}
                   </p>

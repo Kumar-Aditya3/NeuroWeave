@@ -101,7 +101,7 @@ This creates:
 
 ### 2) Configure backend environment
 
-Copy [ .env.supabase.example ](.env.supabase.example) values into your runtime environment:
+Copy values from [.env.supabase.example](.env.supabase.example) into your runtime environment:
 
 - `NEUROWEAVE_SUPABASE_ENABLED=true`
 - `NEUROWEAVE_SUPABASE_URL=<your-project-url>`
