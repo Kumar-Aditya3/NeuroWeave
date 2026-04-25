@@ -154,14 +154,8 @@ function setWindowsWallpaperFallback(imagePath: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const escapedPath = imagePath.replace(/\\/g, "\\\\").replace(/'/g, "''");
     const command = [
-      "$signature = @'",
-      "using System.Runtime.InteropServices;",
-      "public class NativeWallpaper {",
-      "  [DllImport(\"user32.dll\", SetLastError=true)]",
-      "  public static extern bool SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);",
-      "}",
-      "'@;",
-      "Add-Type $signature -ErrorAction SilentlyContinue;",
+      "$typeDef = 'using System.Runtime.InteropServices; public static class NativeWallpaper { [DllImport(\"user32.dll\", SetLastError=true)] public static extern bool SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni); }';",
+      "Add-Type -TypeDefinition $typeDef -ErrorAction SilentlyContinue;",
       `$ok = [NativeWallpaper]::SystemParametersInfo(20, 0, '${escapedPath}', 3);`,
       "if (-not $ok) { exit 1 }",
     ].join(" ");
