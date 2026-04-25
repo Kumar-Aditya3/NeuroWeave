@@ -9,6 +9,9 @@ APP_RULES = [
         "processes": {
             "steam.exe",
             "epicgameslauncher.exe",
+            "eldenring.exe",
+            "starrail.exe",
+            "honkai star rail.exe",
             "valorant-win64-shipping.exe",
             "fortniteclient-win64-shipping.exe",
             "minecraft.exe",
@@ -27,6 +30,7 @@ TITLE_HINTS = [
     {"contains": ["youtube", "spotify", "netflix"], "category": "media", "kind": "active_window"},
     {"contains": ["discord", "slack", "chat"], "category": "communication", "kind": "active_window"},
     {"contains": ["valorant", "minecraft", "counter-strike", "fortnite"], "category": "gaming", "kind": "game"},
+    {"contains": ["elden ring", "honkai star rail", "star rail"], "category": "gaming", "kind": "game"},
 ]
 
 

@@ -28,6 +28,9 @@ GAME_HINTS = {
     "fortniteclient-win64-shipping.exe",
     "minecraftlauncher.exe",
     "minecraft.exe",
+    "eldenring.exe",
+    "starrail.exe",
+    "honkai star rail.exe",
     "robloxplayerbeta.exe",
     "cs2.exe",
     "gta5.exe",
@@ -45,6 +48,9 @@ APP_RULES = [
         "processes": {
             "steam.exe",
             "epicgameslauncher.exe",
+            "eldenring.exe",
+            "starrail.exe",
+            "honkai star rail.exe",
             "valorant-win64-shipping.exe",
             "fortniteclient-win64-shipping.exe",
             "minecraft.exe",
@@ -63,6 +69,7 @@ TITLE_HINTS = [
     {"contains": ["youtube", "spotify", "netflix"], "category": "media", "kind": "active_window"},
     {"contains": ["discord", "slack", "chat"], "category": "communication", "kind": "active_window"},
     {"contains": ["valorant", "minecraft", "counter-strike", "fortnite"], "category": "gaming", "kind": "game"},
+    {"contains": ["elden ring", "honkai star rail", "star rail"], "category": "gaming", "kind": "game"},
 ]
 
 
@@ -296,12 +303,19 @@ def flush_queue(config: dict) -> None:
 def build_payload(config: dict, window: dict) -> dict | None:
     title = (window.get("title") or "").strip()
     process_name = (window.get("process_name") or "unknown").strip()
-    if not title or process_name.lower() in BLOCKED_PROCESS_NAMES:
-        return None
-    if is_sensitive_title(title):
+    if process_name.lower() in BLOCKED_PROCESS_NAMES:
         return None
 
     category, inferred_kind = categorize_app(process_name, title)
+    if not title:
+        if inferred_kind == "game":
+            title = f"Game session ({process_name})"
+        else:
+            return None
+
+    if is_sensitive_title(title):
+        return None
+
     event_type = "game" if inferred_kind == "game" else "active_window"
 
     return {

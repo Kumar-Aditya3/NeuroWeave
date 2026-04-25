@@ -84,12 +84,19 @@ def post_activity_with_fallback(config: dict, payload: dict) -> bool:
 def build_activity_payload(config: dict, window: dict) -> dict | None:
     title = (window.get("title") or "").strip()
     process_name = (window.get("process_name") or "unknown").strip()
-    if not title or process_name.lower() in BLOCKED_PROCESS_NAMES:
+    if process_name.lower() in BLOCKED_PROCESS_NAMES:
         return None
+    category, inferred_kind = categorize_app(process_name, title)
+
+    if not title:
+        if inferred_kind == "game":
+            title = f"Game session ({process_name})"
+        else:
+            return None
+
     if is_sensitive_title(title):
         return None
 
-    category, inferred_kind = categorize_app(process_name, title)
     event_type = "game" if inferred_kind == "game" else "active_window"
     return {
         "user_id": config["user_id"],
