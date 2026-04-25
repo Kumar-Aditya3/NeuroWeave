@@ -145,9 +145,14 @@ function downloadFile(url: string, destination: string): Promise<void> {
   });
 }
 
-function setWindowsWallpaper(imagePath: string): Promise<void> {
+async function setWindowsWallpaper(imagePath: string): Promise<void> {
+  const wallpaper = await import("wallpaper");
+  await wallpaper.setWallpaper(imagePath, { scale: "span" });
+}
+
+function setWindowsWallpaperFallback(imagePath: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const escapedPath = imagePath.replace(/'/g, "''");
+    const escapedPath = imagePath.replace(/\\/g, "\\\\").replace(/'/g, "''");
     const command = [
       "$signature = @'",
       "using System.Runtime.InteropServices;",
@@ -193,12 +198,23 @@ ipcMain.handle("wallpaper:set", async (_event, payload: { previewUrl?: string; c
       return { ok: false, message: "No wallpaper URL or cache path was provided." };
     }
 
-    await setWindowsWallpaper(localPath);
-    return { ok: true, message: "Desktop wallpaper updated.", path: localPath };
+    try {
+      await setWindowsWallpaper(localPath);
+      return { ok: true, message: "Desktop wallpaper updated.", path: localPath };
+    } catch (primaryError) {
+      await setWindowsWallpaperFallback(localPath);
+      return {
+        ok: true,
+        message: "Desktop wallpaper updated (fallback mode).",
+        path: localPath,
+        primaryError: primaryError instanceof Error ? primaryError.message : String(primaryError),
+      };
+    }
   } catch (error) {
     return {
       ok: false,
       message: error instanceof Error ? error.message : "Failed to set wallpaper.",
+      code: "WALLPAPER_SET_FAILED",
     };
   }
 });

@@ -306,14 +306,33 @@ def get_user_sources(user_id: str) -> list[dict]:
             """,
             (user_id,),
         ).fetchall()
-    return [
-        {
-            "device_id": str(row["device_id"]),
-            "client_name": str(row["client_name"]),
-            "last_seen_at": str(row["last_seen_at"]),
-        }
-        for row in rows
-    ]
+
+    filtered: list[dict] = []
+    for row in rows:
+        device_id = str(row["device_id"] or "")
+        client_name = str(row["client_name"] or "")
+        combined = f"{device_id} {client_name}".lower()
+        if (
+            "synthetic" in combined
+            or "-test" in combined
+            or "cli test" in combined
+            or "live test" in combined
+            or "test device" in combined
+            or combined.startswith("test ")
+        ):
+            continue
+
+        filtered.append(
+            {
+                "device_id": device_id,
+                "client_name": client_name,
+                "last_seen_at": str(row["last_seen_at"]),
+            }
+        )
+        if len(filtered) >= 2:
+            break
+
+    return filtered
 
 
 def get_recent_events(user_id: str, limit: int = 20) -> list[dict]:

@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { loadDashboard, sendFeedback } from "./api/client";
-import type { CurrentArc, DashboardData, RecentEvent, Settings, SourceMix, Topic } from "./types";
+import type { CurrentArc, DashboardData, RecentEvent, Settings, SourceMix, Topic, WallpaperSetResponse } from "./types";
 
 const navItems = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
@@ -122,13 +122,29 @@ function App() {
 
   async function handleSetDesktop() {
     if (!recommendation) return;
+    const desktopBridge = (
+      window as unknown as {
+        neuroWeaveDesktop?: {
+          setWallpaper: (payload: { previewUrl?: string; cachedPath?: string | null }) => Promise<WallpaperSetResponse>;
+        };
+      }
+    ).neuroWeaveDesktop;
+    if (!desktopBridge?.setWallpaper) {
+      setWallpaperState("Desktop integration is unavailable. Launch the Electron app build and retry.");
+      return;
+    }
     setWallpaperState("Applying wallpaper...");
     try {
-      const response = await window.neuroWeaveDesktop.setWallpaper({
+      const response = await desktopBridge.setWallpaper({
         previewUrl: recommendation.wallpaper_preview_url,
         cachedPath: recommendation.wallpaper_cached_path,
       });
-      setWallpaperState(response.message);
+      if (response.ok) {
+        setWallpaperState(response.message);
+      } else {
+        const details = response.primaryError ? ` (${response.primaryError})` : "";
+        setWallpaperState(`${response.message}${details}`);
+      }
     } catch (error) {
       setWallpaperState(error instanceof Error ? error.message : "Failed to set wallpaper.");
     }
@@ -241,7 +257,7 @@ function App() {
                     <button
                       onClick={handleSetDesktop}
                       type="button"
-                      disabled={!recommendation?.wallpaper_preview_url && !recommendation?.wallpaper_cached_path}
+                      disabled={!recommendation}
                     >
                       <Wallpaper size={16} /> Set as desktop
                     </button>

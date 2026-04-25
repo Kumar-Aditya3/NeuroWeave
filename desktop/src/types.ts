@@ -125,6 +125,8 @@ export type WallpaperSetResponse = {
   ok: boolean;
   message: string;
   path?: string;
+  code?: string;
+  primaryError?: string;
 };
 
 declare global {
