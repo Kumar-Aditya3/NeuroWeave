@@ -43,9 +43,10 @@ def build_wallpaper_payload(
     vibe: str,
     intensity: str,
     style: str,
-    provider: str = "curated_unsplash",
+    provider: str = "generated_future",
     arc_name: str | None = None,
     recent_memory: list[dict] | None = None,
+    preview_base_url: str = "http://127.0.0.1:8000",
 ) -> dict:
     memory = recent_memory or []
     query_payload = build_wallpaper_query(topic, vibe, intensity, style, arc_name)
@@ -63,7 +64,15 @@ def build_wallpaper_payload(
 
     seed_offset = repeated_count * 5
     if provider == "generated_future":
-        alternates = generated_future_provider(query_payload["wallpaper_query"], intensity)
+        alternates = generated_future_provider(
+            query_payload["wallpaper_query"],
+            intensity,
+            topic=topic,
+            vibe=vibe,
+            style=style_key,
+            seed_offset=seed_offset,
+            base_url=preview_base_url,
+        )
     else:
         alternates = curated_unsplash_provider(
             query_payload["wallpaper_query"],

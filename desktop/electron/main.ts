@@ -43,7 +43,7 @@ const defaults: Settings = {
   recommendationIntensity: "balanced",
   classifierMode: "embedding_primary",
   wallpaperStyle: "minimal",
-  wallpaperProvider: "curated_unsplash",
+  wallpaperProvider: "generated_future",
   topicWeights: {
     tech: 50,
     education: 50,
@@ -153,10 +153,18 @@ async function setWindowsWallpaper(imagePath: string): Promise<void> {
 function setWindowsWallpaperFallback(imagePath: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const escapedPath = imagePath.replace(/\\/g, "\\\\").replace(/'/g, "''");
+    const escapedBmpPath = path.join(os.tmpdir(), "neuroweave", "current_wallpaper.bmp").replace(/\\/g, "\\\\").replace(/'/g, "''");
     const command = [
       "$typeDef = 'using System.Runtime.InteropServices; public static class NativeWallpaper { [DllImport(\"user32.dll\", SetLastError=true)] public static extern bool SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni); }';",
+      "Add-Type -AssemblyName System.Drawing;",
       "Add-Type -TypeDefinition $typeDef -ErrorAction SilentlyContinue;",
-      `$ok = [NativeWallpaper]::SystemParametersInfo(20, 0, '${escapedPath}', 3);`,
+      `$src = '${escapedPath}';`,
+      `$bmp = '${escapedBmpPath}';`,
+      "$bmpDir = Split-Path -Parent $bmp;",
+      "if (-not (Test-Path $bmpDir)) { New-Item -ItemType Directory -Force -Path $bmpDir | Out-Null };",
+      "$img = [System.Drawing.Image]::FromFile($src);",
+      "try { $img.Save($bmp, [System.Drawing.Imaging.ImageFormat]::Bmp) } finally { $img.Dispose() };",
+      "$ok = [NativeWallpaper]::SystemParametersInfo(20, 0, $bmp, 3);",
       "if (-not $ok) { exit 1 }",
     ].join(" ");
 

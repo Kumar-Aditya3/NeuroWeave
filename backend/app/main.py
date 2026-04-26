@@ -1,8 +1,10 @@
 from datetime import datetime, timezone
 from hashlib import sha256
+from pathlib import Path
 from typing import Dict
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.responses import FileResponse
 
 from .arcs import build_current_arcs
 from .auth import require_api_key
@@ -64,6 +66,7 @@ TOPIC_KEYWORDS = {
     "unknown": [],
 }
 DEDUPE_BUCKET_SECONDS = 300
+WALLPAPER_CACHE_ROOT = Path(__file__).resolve().parents[1] / "wallpaper_cache"
 
 
 def recommendation_map(primary_topic: str, vibe: str) -> Dict[str, object]:
@@ -139,12 +142,22 @@ def health() -> HealthResponse:
     return HealthResponse(status="ok")
 
 
+@app.get("/wallpapers/cache/{filename}")
+def wallpaper_cache_file(filename: str):
+    safe_name = Path(filename).name
+    cache_root = WALLPAPER_CACHE_ROOT.resolve()
+    target = (cache_root / safe_name).resolve()
+    if target.parent != cache_root or not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail="Wallpaper file not found")
+    return FileResponse(target)
+
+
 def build_context_recommendation(
     user_id: str,
     classifier_mode: str = "embedding_primary",
     recommendation_intensity: str = "balanced",
     wallpaper_style: str = "minimal",
-    wallpaper_provider: str = "curated_unsplash",
+    wallpaper_provider: str = "generated_future",
     recent_payloads: list[dict] | None = None,
     current_arcs: list[dict] | None = None,
 ) -> ContextRecommendation:
@@ -197,6 +210,7 @@ def build_context_recommendation(
         provider=wallpaper_provider,
         arc_name=top_arc_name,
         recent_memory=get_wallpaper_memory(user_id, limit=36),
+        preview_base_url="http://127.0.0.1:8000",
     )
     create_wallpaper_memory(
         user_id=user_id,
@@ -526,7 +540,7 @@ def recommend_context(
     classifier_mode: str = "embedding_primary",
     recommendation_intensity: str = "balanced",
     wallpaper_style: str = "minimal",
-    wallpaper_provider: str = "curated_unsplash",
+    wallpaper_provider: str = "generated_future",
     _: str = Depends(require_api_key),
 ) -> ContextRecommendation:
     return build_context_recommendation(
@@ -585,7 +599,7 @@ def me_dashboard(
     classifier_mode: str = "embedding_primary",
     recommendation_intensity: str = "balanced",
     wallpaper_style: str = "minimal",
-    wallpaper_provider: str = "curated_unsplash",
+    wallpaper_provider: str = "generated_future",
     _: str = Depends(require_api_key),
 ) -> DashboardResponse:
     recent_events = get_recent_events(user_id, limit)
