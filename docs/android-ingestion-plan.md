@@ -8,7 +8,7 @@ NeuroWeave already accepts future mobile events through `POST /ingest/activity` 
 
 ## Phase 1
 
-Use Android share intent to send text, links, and article titles into NeuroWeave.
+Use Android share intent to send text, links, and article titles into NeuroWeave. The first native watcher lives in `android_watcher/`.
 
 Payload shape:
 
@@ -28,7 +28,7 @@ Payload shape:
 
 ## Phase 2
 
-Add optional app-usage ingestion where Android permissions allow it.
+Add optional app-usage ingestion where Android permissions allow it. `android_watcher` uses Usage Access to report foreground-app sessions with `duration_seconds`.
 
 Examples:
 
