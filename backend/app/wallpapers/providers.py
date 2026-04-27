@@ -64,7 +64,7 @@ def generated_future_provider(
                 {
                     "preview_url": preview_url,
                     "cached_path": cached_path,
-                    "source": "Procedural Mood Generator",
+                    "source": "Procedural Mood Pattern Generator",
                     "provider": "generated_future",
                 }
             )
