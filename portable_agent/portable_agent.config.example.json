@@ -3,6 +3,7 @@
   "device_id": "",
   "client_name": "",
   "interval_seconds": 12,
+  "min_duration_seconds": 4,
   "ingest_url": "https://xfffhfiefspczxhpeszu.supabase.co/functions/v1/ingest-event",
   "ingest_key": "replace_with_your_ingest_key",
   "max_queue_items": 2000,

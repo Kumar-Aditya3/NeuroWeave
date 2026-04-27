@@ -12,7 +12,7 @@ It expects:
 - Header: `X-Ingest-Key: <NEUROWEAVE_INGEST_KEY>`
 - JSON body fields:
   - required: `user_id`, `source`, `event_type`
-  - optional: `device_id`, `client_name`, `title`, `url`, `category`, `selected_text`, `content_text`, `process_name`, `timestamp`
+  - optional: `device_id`, `client_name`, `title`, `url`, `category`, `duration_seconds`, `selected_text`, `content_text`, `process_name`, `timestamp`
 
 ## Deploy
 

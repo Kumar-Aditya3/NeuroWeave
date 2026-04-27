@@ -60,6 +60,7 @@ def build_current_arcs(
                 payload.get("source", ""),
                 payload.get("event_type", ""),
                 payload.get("category", ""),
+                f"{payload.get('duration_seconds', 0)} seconds active",
             ]
         ).strip()
         if not text_blob:
@@ -70,7 +71,8 @@ def build_current_arcs(
             key=lambda key: cosine_similarity(encoded, centroid_state[key]["centroid"]),
         )
         analysis = classify_text(text_blob, classifier_mode=classifier_mode)
-        recency_weight = max(0.2, 1.0 - (index * 0.035))
+        duration_bonus = min(0.75, float(payload.get("duration_seconds", 0) or 0) / 900.0)
+        recency_weight = max(0.2, 1.0 - (index * 0.035)) + duration_bonus
         sample_count = float(centroid_state[arc_name]["sample_count"])
         learning_rate = min(0.45, (0.08 + (0.22 * recency_weight)) / (1.0 + (sample_count * 0.02)))
         centroid_state[arc_name]["centroid"] = _weighted_centroid_update(

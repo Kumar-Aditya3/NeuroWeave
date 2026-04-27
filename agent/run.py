@@ -81,7 +81,7 @@ def post_activity_with_fallback(config: dict, payload: dict) -> bool:
     return post_activity_cloud(config, payload)
 
 
-def build_activity_payload(config: dict, window: dict) -> dict | None:
+def build_activity_payload(config: dict, window: dict, duration_seconds: int | None = None) -> dict | None:
     title = (window.get("title") or "").strip()
     process_name = (window.get("process_name") or "unknown").strip()
     if process_name.lower() in BLOCKED_PROCESS_NAMES:
@@ -107,6 +107,8 @@ def build_activity_payload(config: dict, window: dict) -> dict | None:
         "title": title,
         "process_name": process_name,
         "category": category,
+        "duration_seconds": duration_seconds,
+        "content_text": f"{category} activity in {process_name}",
         "timestamp": now_iso(),
     }
 
@@ -145,24 +147,36 @@ def main() -> None:
     config = load_config()
     print(f"NeuroWeave agent running as {config['client_name']} ({config['device_id']})")
     last_activity_key = ""
+    active_window: dict | None = None
+    active_started_at = time.monotonic()
 
     while True:
         if config.get("active_app_enabled", True):
             window = get_active_window()
-            payload = build_activity_payload(config, window)
-            if payload:
+            probe = build_activity_payload(config, window, duration_seconds=0)
+            if probe:
                 activity_key = "|".join(
                     [
-                        payload["event_type"],
-                        payload.get("category", ""),
-                        payload["title"],
-                        payload.get("process_name", ""),
+                        probe["event_type"],
+                        probe.get("category", ""),
+                        probe["title"],
+                        probe.get("process_name", ""),
                     ]
                 )
-                if activity_key != last_activity_key:
-                    if post_activity_with_fallback(config, payload):
-                        print(f"Sent {payload['event_type']}: {payload['title']}")
+                if not active_window:
+                    active_window = window
+                    active_started_at = time.monotonic()
                     last_activity_key = activity_key
+                elif activity_key != last_activity_key:
+                    duration = int(time.monotonic() - active_started_at)
+                    previous_payload = build_activity_payload(config, active_window, duration_seconds=duration)
+                    if previous_payload and duration >= int(config.get("min_duration_seconds", 4)):
+                        if post_activity_with_fallback(config, previous_payload):
+                            print(f"Sent {previous_payload['event_type']}: {previous_payload['title']} ({duration}s)")
+                    active_window = window
+                    active_started_at = time.monotonic()
+                    last_activity_key = activity_key
+
                 maybe_send_ocr(config, window)
 
         time.sleep(max(5, int(config.get("interval_seconds", 20))))

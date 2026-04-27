@@ -9,6 +9,7 @@ type IngestEvent = {
   url?: string | null;
   title?: string | null;
   category?: string | null;
+  duration_seconds?: number | null;
   selected_text?: string | null;
   content_text?: string | null;
   process_name?: string | null;
@@ -89,6 +90,7 @@ Deno.serve(async (req) => {
     url: payload.url || null,
     title: payload.title || null,
     category: payload.category || null,
+    duration_seconds: Number.isFinite(payload.duration_seconds) ? Math.max(0, Math.floor(Number(payload.duration_seconds))) : null,
     selected_text: payload.selected_text || null,
     content_text: payload.content_text || null,
     process_name: payload.process_name || null,

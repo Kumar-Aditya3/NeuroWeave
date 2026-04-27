@@ -15,6 +15,7 @@ create table if not exists public.events_raw (
   url text,
   title text,
   category text,
+  duration_seconds integer,
   selected_text text,
   content_text text,
   process_name text,

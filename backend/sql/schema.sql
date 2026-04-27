@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS events (
     url TEXT,
     title TEXT,
     category TEXT,
+    duration_seconds INTEGER,
     selected_text TEXT,
     content_text TEXT,
     topic_scores_json TEXT NOT NULL,

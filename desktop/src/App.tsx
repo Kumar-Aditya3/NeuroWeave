@@ -357,7 +357,8 @@ function EventList({ events, title, large = false }: { events: RecentEvent[]; ti
             <div>
               <strong>{event.title ?? "Untitled event"}</strong>
               <span>
-                {event.client_name ?? "Unknown device"} / {event.category ?? event.event_type} / {event.classifier_mode ?? "n/a"}
+                {event.client_name ?? "Unknown device"} / {event.category ?? event.event_type}
+                {event.duration_seconds ? ` / ${event.duration_seconds}s` : ""} / {event.classifier_mode ?? "n/a"}
               </span>
             </div>
             <time>{new Date(event.created_at).toLocaleTimeString()}</time>

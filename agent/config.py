@@ -13,6 +13,7 @@ DEFAULT_CONFIG = {
     "backend_url": "http://127.0.0.1:8000",
     "api_key": "dev-local-key",
     "interval_seconds": 20,
+    "min_duration_seconds": 4,
     "browser_enabled": False,
     "active_app_enabled": True,
     "ocr_enabled": False,

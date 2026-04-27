@@ -88,6 +88,7 @@ DEFAULT_CONFIG = {
     "device_id": "",
     "client_name": "",
     "interval_seconds": 12,
+    "min_duration_seconds": 4,
     "ingest_url": "https://xfffhfiefspczxhpeszu.supabase.co/functions/v1/ingest-event",
     "ingest_key": "",
     "max_queue_items": 2000,
@@ -300,7 +301,7 @@ def flush_queue(config: dict) -> None:
         print(f"Flushed {sent_count} queued event(s)")
 
 
-def build_payload(config: dict, window: dict) -> dict | None:
+def build_payload(config: dict, window: dict, duration_seconds: int | None = None) -> dict | None:
     title = (window.get("title") or "").strip()
     process_name = (window.get("process_name") or "unknown").strip()
     if process_name.lower() in BLOCKED_PROCESS_NAMES:
@@ -327,6 +328,8 @@ def build_payload(config: dict, window: dict) -> dict | None:
         "title": title,
         "process_name": process_name,
         "category": category,
+        "duration_seconds": duration_seconds,
+        "content_text": f"{category} activity in {process_name}",
         "timestamp": now_iso(),
     }
 
@@ -342,29 +345,40 @@ def main() -> None:
         print("WARNING: ingest_key is empty in portable_agent.config.json")
 
     last_activity_key = ""
+    active_window: dict | None = None
+    active_started_at = time.monotonic()
     while True:
         flush_queue(config)
 
         window = get_active_window()
-        payload = build_payload(config, window)
-        if payload:
+        probe = build_payload(config, window, duration_seconds=0)
+        if probe:
             activity_key = "|".join(
                 [
-                    payload["event_type"],
-                    payload.get("category", ""),
-                    payload["title"],
-                    payload.get("process_name", ""),
+                    probe["event_type"],
+                    probe.get("category", ""),
+                    probe["title"],
+                    probe.get("process_name", ""),
                 ]
             )
-            if activity_key != last_activity_key:
-                ingest_url = str(config.get("ingest_url", "")).strip()
-                ingest_key = str(config.get("ingest_key", "")).strip()
-                ok = _post_event(ingest_url, ingest_key, payload)
-                if ok:
-                    print(f"Sent {payload['event_type']}: {payload['title']}")
-                else:
-                    _enqueue(payload, max_items=int(config.get("max_queue_items", 2000)))
-                    print("Queued event due to ingest outage")
+            if not active_window:
+                active_window = window
+                active_started_at = time.monotonic()
+                last_activity_key = activity_key
+            elif activity_key != last_activity_key:
+                duration = int(time.monotonic() - active_started_at)
+                payload = build_payload(config, active_window, duration_seconds=duration)
+                if payload and duration >= int(config.get("min_duration_seconds", 4)):
+                    ingest_url = str(config.get("ingest_url", "")).strip()
+                    ingest_key = str(config.get("ingest_key", "")).strip()
+                    ok = _post_event(ingest_url, ingest_key, payload)
+                    if ok:
+                        print(f"Sent {payload['event_type']}: {payload['title']} ({duration}s)")
+                    else:
+                        _enqueue(payload, max_items=int(config.get("max_queue_items", 2000)))
+                        print("Queued event due to ingest outage")
+                active_window = window
+                active_started_at = time.monotonic()
                 last_activity_key = activity_key
 
         time.sleep(max(4, int(config.get("interval_seconds", 12))))

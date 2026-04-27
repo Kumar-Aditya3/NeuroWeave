@@ -12,6 +12,7 @@ const DEFAULTS = {
 
 const blockedSchemes = ["chrome://", "opera://", "edge://", "about:", "file://"];
 const lastSentByTab = new Map();
+let activeTabState = null;
 
 async function getSettings() {
   const settings = await chrome.storage.local.get(DEFAULTS);
@@ -27,12 +28,20 @@ function isTrackableUrl(url) {
   return !blockedSchemes.some((scheme) => url.startsWith(scheme));
 }
 
-async function sendTabEvent(tab) {
+function hostnameFor(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+async function sendTabEvent(tab, durationSeconds = null) {
   const settings = await getSettings();
   if (!settings.trackingEnabled || !isTrackableUrl(tab.url)) return;
 
   const lastKey = lastSentByTab.get(tab.id);
-  const currentKey = `${tab.url}|${tab.title || ""}`;
+  const currentKey = `${tab.url}|${tab.title || ""}|${durationSeconds ?? "open"}`;
   if (lastKey === currentKey) return;
   lastSentByTab.set(tab.id, currentKey);
 
@@ -44,6 +53,9 @@ async function sendTabEvent(tab) {
     event_type: "browser_tab",
     url: tab.url,
     title: tab.title || tab.url,
+    category: "browsing",
+    duration_seconds: durationSeconds,
+    content_text: `browser activity on ${hostnameFor(tab.url)}`,
     timestamp: new Date().toISOString()
   };
 
@@ -92,17 +104,39 @@ async function sendTabEvent(tab) {
   }
 }
 
+async function flushActiveTab() {
+  if (!activeTabState) return;
+  const durationSeconds = Math.floor((Date.now() - activeTabState.startedAt) / 1000);
+  if (durationSeconds < 4) return;
+  try {
+    const tab = activeTabState.snapshot || await chrome.tabs.get(activeTabState.tabId);
+    await sendTabEvent(tab, durationSeconds);
+  } catch {
+    // The tab may have closed before the service worker woke up.
+  }
+}
+
 chrome.runtime.onInstalled.addListener(async () => {
   await getSettings();
 });
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === "complete") {
-    sendTabEvent(tab);
+    activeTabState = { tabId, startedAt: Date.now(), snapshot: tab };
+    sendTabEvent(tab, null);
   }
 });
 
 chrome.tabs.onActivated.addListener(async ({ tabId }) => {
+  await flushActiveTab();
   const tab = await chrome.tabs.get(tabId);
-  sendTabEvent(tab);
+  activeTabState = { tabId, startedAt: Date.now(), snapshot: tab };
+  sendTabEvent(tab, null);
+});
+
+chrome.tabs.onRemoved.addListener(async (tabId) => {
+  if (activeTabState?.tabId === tabId) {
+    await flushActiveTab();
+    activeTabState = null;
+  }
 });

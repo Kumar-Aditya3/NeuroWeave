@@ -71,6 +71,7 @@ class ActivityIngestRequest(BaseModel):
     content_text: Optional[str] = None
     process_name: Optional[str] = None
     category: Optional[str] = None
+    duration_seconds: Optional[int] = Field(default=None, ge=0)
     timestamp: Optional[datetime] = None
 
 
@@ -125,6 +126,7 @@ class RecentEvent(BaseModel):
     url: Optional[str]
     title: Optional[str]
     category: Optional[str] = None
+    duration_seconds: Optional[int] = None
     sentiment: Sentiment
     vibe: Vibe
     created_at: str

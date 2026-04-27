@@ -65,6 +65,7 @@ def main() -> None:
                 "title": "VS Code - backend refactor",
                 "process_name": "code.exe",
                 "category": "coding",
+                "duration_seconds": 420,
                 "content_text": "python fastapi model update",
                 "timestamp": _iso_now(),
             },
@@ -77,6 +78,7 @@ def main() -> None:
                 "title": "Valorant ranked session",
                 "process_name": "valorant-win64-shipping.exe",
                 "category": "gaming",
+                "duration_seconds": 1800,
                 "content_text": "competitive match intense focus",
                 "timestamp": _iso_now(),
             },
@@ -89,6 +91,7 @@ def main() -> None:
                 "title": "Shared article from phone",
                 "url": "https://example.com/ai-news",
                 "category": "mobile_share",
+                "duration_seconds": 35,
                 "content_text": "breaking ai news and research highlights",
                 "timestamp": _iso_now(),
             },
@@ -108,6 +111,7 @@ def main() -> None:
             "title": "VS Code - backend refactor",
             "process_name": "code.exe",
             "category": "coding",
+            "duration_seconds": 40,
             "timestamp": dedupe_timestamp,
         }
         first = client.post("/ingest/activity", json=dedupe_payload, headers=headers)
@@ -146,6 +150,10 @@ def main() -> None:
         )
         _assert(recent_events.status_code == 200, f"Recent events failed: {recent_events.text}")
         _assert(len(recent_events.json().get("events", [])) >= 5, "Expected multiple synthetic events")
+        _assert(
+            any((event.get("duration_seconds") or 0) > 0 for event in recent_events.json().get("events", [])),
+            "Expected duration-aware events",
+        )
 
         dashboard = client.get(
             "/me/dashboard",

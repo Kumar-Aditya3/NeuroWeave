@@ -69,6 +69,7 @@ export type RecentEvent = {
   url: string | null;
   title: string | null;
   category?: string | null;
+  duration_seconds?: number | null;
   sentiment: "positive" | "neutral" | "negative";
   vibe: Vibe;
   created_at: string;
