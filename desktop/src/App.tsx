@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   Brain,
   CheckCircle2,
+  ChevronDown,
   Clapperboard,
   Compass,
   Gauge,
@@ -47,6 +48,7 @@ const topicLabels: Record<Topic, string> = {
 function App() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [activeView, setActiveView] = useState<(typeof navItems)[number]["id"]>("overview");
+  const [showGenerationDetails, setShowGenerationDetails] = useState(false);
   const [dashboard, setDashboard] = useState<DashboardData>({
     online: false,
     lastSync: null,
@@ -240,6 +242,128 @@ function App() {
                     <span className="eyebrow">Rationale</span>
                     <p>{recommendation?.wallpaper_rationale ?? "Waiting for a semantic arc to form."}</p>
                   </div>
+                  
+                  {/* Generation Details & Provenance Section */}
+                  {recommendation?.prompt_components || recommendation?.generation_metadata || recommendation?.novelty_context || recommendation?.classification_confidence ? (
+                    <div className="detailsSection">
+                      <button
+                        className="detailsToggle"
+                        onClick={() => setShowGenerationDetails(!showGenerationDetails)}
+                        type="button"
+                      >
+                        <ChevronDown size={16} style={{ transform: showGenerationDetails ? "rotate(180deg)" : "rotate(0)" }} />
+                        Generation Details & Provenance
+                      </button>
+                      {showGenerationDetails && (
+                        <div className="detailsPanel">
+                          {recommendation.prompt_components && (
+                            <div className="detailsGroup">
+                              <h4>Prompt Components</h4>
+                              {recommendation.prompt_components.arc_name && (
+                                <p>
+                                  <span className="detailLabel">Arc:</span> {recommendation.prompt_components.arc_name}
+                                </p>
+                              )}
+                              {recommendation.prompt_components.vibe_base && (
+                                <p>
+                                  <span className="detailLabel">Vibe:</span> {recommendation.prompt_components.vibe_base}
+                                </p>
+                              )}
+                              {recommendation.prompt_components.topic_base && (
+                                <p>
+                                  <span className="detailLabel">Topic:</span> {recommendation.prompt_components.topic_base}
+                                </p>
+                              )}
+                              {recommendation.prompt_components.style_hint && (
+                                <p>
+                                  <span className="detailLabel">Style:</span> {recommendation.prompt_components.style_hint}
+                                </p>
+                              )}
+                              {recommendation.prompt_components.novelty_hint && (
+                                <p>
+                                  <span className="detailLabel">Novelty:</span> {recommendation.prompt_components.novelty_hint}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                          
+                          {recommendation.generation_metadata && (
+                            <div className="detailsGroup">
+                              <h4>Generation Metadata</h4>
+                              {recommendation.generation_metadata.model && (
+                                <p>
+                                  <span className="detailLabel">Model:</span> {recommendation.generation_metadata.model}
+                                </p>
+                              )}
+                              {recommendation.generation_metadata.device && (
+                                <p>
+                                  <span className="detailLabel">Device:</span> {recommendation.generation_metadata.device}
+                                </p>
+                              )}
+                              {recommendation.generation_metadata.steps && (
+                                <p>
+                                  <span className="detailLabel">Steps:</span> {recommendation.generation_metadata.steps}
+                                </p>
+                              )}
+                              {recommendation.generation_metadata.guidance_scale !== undefined && (
+                                <p>
+                                  <span className="detailLabel">Guidance:</span> {recommendation.generation_metadata.guidance_scale}
+                                </p>
+                              )}
+                              {recommendation.generation_metadata.width && recommendation.generation_metadata.height && (
+                                <p>
+                                  <span className="detailLabel">Canvas:</span> {recommendation.generation_metadata.width}x{recommendation.generation_metadata.height}
+                                </p>
+                              )}
+                              {recommendation.generation_metadata.fallback_used && (
+                                <p className="fallbackWarning">
+                                  <span className="detailLabel">Fallback Used:</span> {recommendation.generation_metadata.fallback_to || "procedural"} {recommendation.generation_metadata.fallback_reason && `(${recommendation.generation_metadata.fallback_reason})`}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                          
+                          {recommendation.novelty_context && (
+                            <div className="detailsGroup">
+                              <h4>Novelty Context</h4>
+                              {recommendation.novelty_context.recent_count !== undefined && (
+                                <p>
+                                  <span className="detailLabel">Recent Count:</span> {recommendation.novelty_context.recent_count}
+                                </p>
+                              )}
+                              {recommendation.novelty_context.novelty_hint_applied && (
+                                <p>
+                                  <span className="detailLabel">Hint Applied:</span> Yes
+                                </p>
+                              )}
+                              {recommendation.novelty_context.similarity_score !== undefined && (
+                                <p>
+                                  <span className="detailLabel">Similarity:</span> {(recommendation.novelty_context.similarity_score * 100).toFixed(1)}%
+                                </p>
+                              )}
+                            </div>
+                          )}
+                          
+                          {recommendation.classification_confidence && (
+                            <div className="detailsGroup">
+                              <h4>Classification Confidence</h4>
+                              {recommendation.classification_confidence.primary_topic_confidence !== undefined && (
+                                <p>
+                                  <span className="detailLabel">{recommendation.primary_topic}:</span> {(recommendation.classification_confidence.primary_topic_confidence * 100).toFixed(1)}%
+                                </p>
+                              )}
+                              {recommendation.classification_confidence.classifier_mode && (
+                                <p>
+                                  <span className="detailLabel">Mode:</span> {recommendation.classification_confidence.classifier_mode}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+                  
                   <div className="paletteRow">
                     {(recommendation?.wallpaper_palette ?? []).map((color) => (
                       <span className="swatch" key={color} style={{ background: color }} />

@@ -93,6 +93,11 @@ class ContextRecommendation(BaseModel):
     vibe: Vibe
     classifier_mode: str = "embedding_primary"
     explanation: str = ""
+    # Data visibility fields (detailed explainability)
+    prompt_components: Optional[dict] = None
+    generation_metadata: Optional[dict] = None
+    novelty_context: Optional[dict] = None
+    classification_confidence: Optional[dict] = None
 
 
 class FeedbackRequest(BaseModel):

@@ -223,6 +223,14 @@ def build_context_recommendation(
     )
     if top_arc_name:
         explanation = f"{explanation} Active arc: {top_arc_name}."
+    
+    # Build classification confidence metadata
+    classification_confidence = {
+        "topic_scores_all": {k: round(v, 4) for k, v in profile.items()},
+        "primary_topic_confidence": profile.get(primary_topic, 0.0),
+        "classifier_mode": classifier_mode,
+    }
+    
     return ContextRecommendation(
         user_id=user_id,
         primary_topic=primary_topic,  # type: ignore[arg-type]
@@ -241,6 +249,10 @@ def build_context_recommendation(
         vibe=vibe,  # type: ignore[arg-type]
         classifier_mode=classifier_mode,
         explanation=explanation,
+        prompt_components=wallpaper.get("prompt_components"),
+        generation_metadata=wallpaper.get("generation_metadata"),
+        novelty_context=wallpaper.get("novelty_context"),
+        classification_confidence=classification_confidence,
     )
 
 

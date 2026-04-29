@@ -57,6 +57,36 @@ export type Recommendation = {
   vibe: Vibe;
   classifier_mode: ClassifierMode;
   explanation: string;
+  // Data visibility fields (detailed explainability)
+  prompt_components?: {
+    arc_name?: string;
+    vibe_base?: string;
+    topic_base?: string;
+    style_hint?: string;
+    novelty_hint?: string;
+  };
+  generation_metadata?: {
+    model?: string;
+    device?: string;
+    steps?: number;
+    guidance_scale?: number;
+    seed?: string;
+    width?: number;
+    height?: number;
+    fallback_used?: boolean;
+    fallback_reason?: string;
+    fallback_to?: string;
+  };
+  novelty_context?: {
+    recent_count?: number;
+    novelty_hint_applied?: boolean;
+    similarity_score?: number;
+  };
+  classification_confidence?: {
+    topic_scores_all?: Record<Topic, number>;
+    primary_topic_confidence?: number;
+    classifier_mode?: ClassifierMode;
+  };
 };
 
 export type RecentEvent = {

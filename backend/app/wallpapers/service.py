@@ -54,6 +54,9 @@ def build_wallpaper_payload(
 
     style_key = style if style in styles.WALLPAPER_STYLE_HINTS else "minimal"
     repeated_count = _matching_memory_count(topic, vibe, style_key, provider, memory)
+    
+    # Track novelty hint for explainability
+    novelty_hint = None
     if repeated_count > 0:
         novelty_hint = NOVELTY_HINTS[repeated_count % len(NOVELTY_HINTS)]
         candidate_query = f"{query} {novelty_hint}"
@@ -81,6 +84,23 @@ def build_wallpaper_payload(
         )
         provider = "curated_unsplash"
 
+    # Extract generation metadata from first alternate
+    generation_metadata = alternates[0].get("generation_metadata", {}) if alternates else {}
+    
+    # Build explainability data
+    prompt_components = {
+        "arc_name": arc_name,
+        "vibe_base": styles.VIBE_BASE.get(vibe, styles.VIBE_BASE["balanced"]),
+        "topic_base": styles.TOPIC_BASE.get(topic, styles.TOPIC_BASE["unknown"]),
+        "style_hint": styles.WALLPAPER_STYLE_HINTS.get(style_key, styles.WALLPAPER_STYLE_HINTS["minimal"]),
+        "novelty_hint": novelty_hint,
+    }
+    
+    novelty_context = {
+        "recent_count": repeated_count,
+        "novelty_hint_applied": novelty_hint is not None,
+    }
+
     return {
         **query_payload,
         "wallpaper_preview_url": alternates[0]["preview_url"],
@@ -88,4 +108,7 @@ def build_wallpaper_payload(
         "wallpaper_provider": provider,
         "wallpaper_cached_path": alternates[0]["cached_path"],
         "wallpaper_alternates": alternates,
+        "prompt_components": prompt_components,
+        "generation_metadata": generation_metadata,
+        "novelty_context": novelty_context,
     }
