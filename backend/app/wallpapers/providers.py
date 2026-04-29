@@ -37,14 +37,19 @@ def generated_future_provider(
     topic: str,
     vibe: str,
     style: str,
+    negative_prompt: str | None = None,
     count: int = 3,
     seed_offset: int = 0,
     base_url: str = "http://127.0.0.1:8000",
 ) -> list[dict]:
     """Generate wallpapers via diffusion (primary) with procedural/Picsum fallback."""
     alternates = []
+    generator = get_generator()
+    effective_count = count
+    if generator.device != "cuda" or (generator.gpu_memory_gb is not None and generator.gpu_memory_gb <= 4.5):
+        effective_count = 1
     
-    for index in range(count):
+    for index in range(effective_count):
         signature_index = index + max(0, seed_offset)
         seed = hashlib.sha256(f"diff:{query}:{intensity}:{topic}:{vibe}:{style}:{signature_index}".encode("utf-8")).hexdigest()[:12]
         cache_key = f"diff-{seed}"
@@ -57,10 +62,12 @@ def generated_future_provider(
                 lambda output: _generate_diffusion_image(
                     output,
                     prompt=query,
+                    negative_prompt=negative_prompt,
                     seed=seed,
                     metadata_container=generation_metadata,
                 ),
                 extension="jpg",
+                propagate_errors=True,
             )
             
             if cached_path:
@@ -123,16 +130,20 @@ def generated_future_provider(
 def _generate_diffusion_image(
     output_path: Path,
     prompt: str,
+    negative_prompt: str | None,
     seed: str,
     metadata_container: dict,
 ) -> None:
     """Generate image via local diffusion pipeline and save to output_path."""
     try:
         generator = get_generator()
-        image, metadata = generator.generate(prompt=prompt, seed=int(seed[:8], 16))
+        image, metadata = generator.generate(
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            seed=int(seed[:8], 16),
+        )
         metadata_container.update(metadata)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         image.save(output_path, format="JPEG", quality=96, optimize=True, progressive=True)
     except Exception as e:
         raise RuntimeError(f"Failed to generate diffusion image: {e}")
-

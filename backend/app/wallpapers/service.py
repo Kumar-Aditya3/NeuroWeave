@@ -73,6 +73,7 @@ def build_wallpaper_payload(
             topic=topic,
             vibe=vibe,
             style=style_key,
+            negative_prompt=query_payload.get("negative_prompt"),
             seed_offset=seed_offset,
             base_url=preview_base_url,
         )

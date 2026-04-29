@@ -52,7 +52,14 @@ if %ERRORLEVEL% neq 0 (
 )
 
 python -m pip install --upgrade pip -q
-python -m pip install -r requirements.txt
+where nvidia-smi >nul 2>nul
+if %ERRORLEVEL%==0 (
+  echo [OK] NVIDIA GPU detected - installing CUDA-enabled PyTorch stack
+  python -m pip install -r requirements-gpu.txt
+) else (
+  echo [OK] No NVIDIA GPU detected - installing standard dependencies
+  python -m pip install -r requirements.txt
+)
 if %ERRORLEVEL% neq 0 (
   echo ERROR: Failed to install dependencies
   pause

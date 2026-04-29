@@ -2,11 +2,13 @@ __pycache__/
 *.py[cod]
 .venv/
 backend/data.db
+backend/.hf/
 backend/.env.local
 backend/.env.*.local
 backend/wallpaper_cache/
 agent/config.local.json
 desktop/node_modules/
+desktop/build.log
 desktop/dist/
 desktop/dist-electron/
 desktop/dist-renderer/

@@ -1,19 +1,19 @@
 TOPIC_BASE = {
-    "tech": "futuristic workstation interface steel glass midnight city",
-    "education": "study desk library books warm light focus room",
-    "anime": "stylized cinematic city neon illustration expressive composition",
-    "fitness": "athletic motion training energy strong contrast body momentum",
-    "philosophy": "monochrome sculpture stone hall abstract reflective shadows",
-    "self-help": "clean interior sunrise notebook ritual calm order",
-    "news": "editorial world map newsroom information grid modern print feel",
-    "unknown": "atmospheric modern texture soft geometry neutral desktop art",
+    "tech": "glowing circuit traces, soft teal data lines, futuristic glass panels",
+    "education": "knowledge spaces, warm study light, ordered architectural lines",
+    "anime": "stylized skyline, neon gradients, dreamlike motion",
+    "fitness": "kinetic motion trails, athletic rhythm, sharp contrast",
+    "philosophy": "sculptural forms, stone texture, contemplative depth",
+    "self-help": "sunrise clarity, calm ritual objects, balanced space",
+    "news": "editorial grids, global patterns, modern print texture",
+    "unknown": "atmospheric geometry, layered light, uncluttered focus",
 }
 
 VIBE_BASE = {
-    "calm": "soft ambient spacious quiet serene",
-    "balanced": "steady elegant grounded refined",
-    "intense": "dynamic cinematic fast electric high-energy",
-    "dark": "moody shadowed nocturnal dramatic",
+    "calm": "serene, airy, restorative",
+    "balanced": "grounded, elegant, composed",
+    "intense": "electric, cinematic, high-energy",
+    "dark": "moody, nocturnal, shadow-rich",
 }
 
 PALETTE_MAP = {
@@ -24,9 +24,21 @@ PALETTE_MAP = {
 }
 
 WALLPAPER_STYLE_HINTS = {
-    "minimal": "minimal clean composition subtle texture restrained shapes",
-    "cinematic": "cinematic dramatic lighting widescreen atmosphere",
-    "warm": "warm ambient glow golden light tactile surfaces",
-    "neon": "neon luminous futuristic electric color",
-    "editorial": "editorial art-directed photography refined composition",
+    "minimal": "minimal abstract composition, premium surface texture",
+    "cinematic": "cinematic lighting, immersive depth",
+    "warm": "warm ambient glow, soft gradients",
+    "neon": "neon futurism, vibrant night glow",
+    "editorial": "editorial art direction, refined layout",
 }
+
+INTENSITY_HINTS = {
+    "low": "subtle motion, restful pacing",
+    "balanced": "moderate motion, readable detail",
+    "high": "bold motion, dramatic contrast",
+}
+
+NEGATIVE_PROMPT = (
+    "text, letters, logo, watermark, frame, border, person, face, hands, anatomy, "
+    "photograph of a real room, lowres, blurry, noisy, distorted, duplicated elements, "
+    "busy collage, clutter, artifacts, oversaturated highlights"
+)

@@ -20,7 +20,12 @@ def cache_image(remote_url: str, cache_key: str) -> str | None:
         return None
 
 
-def cache_generated_image(cache_key: str, writer: Callable[[Path], None], extension: str = "jpg") -> str | None:
+def cache_generated_image(
+    cache_key: str,
+    writer: Callable[[Path], None],
+    extension: str = "jpg",
+    propagate_errors: bool = False,
+) -> str | None:
     CACHE_ROOT.mkdir(parents=True, exist_ok=True)
     cache_path = CACHE_ROOT / f"{cache_key}.{extension}"
     if cache_path.exists():
@@ -30,4 +35,6 @@ def cache_generated_image(cache_key: str, writer: Callable[[Path], None], extens
         writer(cache_path)
         return str(cache_path)
     except Exception:
+        if propagate_errors:
+            raise
         return None

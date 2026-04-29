@@ -67,7 +67,13 @@ Write-Host ""
 Write-Status "Installing dependencies (this may take 5-15 minutes)..."
 cd backend
 python -m pip install --upgrade pip -q
-python -m pip install -r requirements.txt
+if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
+    Write-Status "NVIDIA GPU detected - installing CUDA-enabled PyTorch stack" "OK"
+    python -m pip install -r requirements-gpu.txt
+} else {
+    Write-Status "No NVIDIA GPU detected - installing standard dependencies" "OK"
+    python -m pip install -r requirements.txt
+}
 if ($LASTEXITCODE -ne 0) {
     Write-Status "Failed to install dependencies" "ERROR"
     exit 1
