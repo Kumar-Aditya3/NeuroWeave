@@ -13,7 +13,6 @@ import {
   LayoutDashboard,
   MonitorSmartphone,
   MoonStar,
-  Music2,
   RefreshCcw,
   Settings as SettingsIcon,
   SlidersHorizontal,
@@ -326,10 +325,10 @@ function App() {
         {activeView === "overview" && (
           <section className="view overview">
             <div className="stateStrip">
-              <StatePill icon={Brain} label="Model" value={recommendation?.classifier_mode ?? settings.classifierMode} />
+              <StatePill icon={Compass} label="Session" value={recommendation?.session_context?.kind ?? "Warming up"} />
               <StatePill icon={Gauge} label="Topic" value={topicLabels[primaryTopic]} />
               <StatePill icon={MoonStar} label="Vibe" value={vibe} />
-              <StatePill icon={Wallpaper} label="Provider" value={recommendation?.wallpaper_provider ?? settings.wallpaperProvider} />
+              <StatePill icon={Wallpaper} label="Style" value={settings.wallpaperStyle} />
             </div>
 
             <div className="grid heroGrid">
@@ -505,17 +504,6 @@ function App() {
                 </div>
               </section>
 
-              <section className="panel recommendationBand">
-                <div className="panelHeader">
-                  <h2>Recommendation Band</h2>
-                  <Sparkles size={18} />
-                </div>
-                <div className="grid three">
-                  <InsightCard icon={Music2} label="Music mood" value={recommendation?.music_mood ?? "Waiting"} />
-                  <InsightCard icon={Sparkles} label="Quote style" value={recommendation?.quote_style ?? "Waiting"} />
-                  <InsightCard icon={Clapperboard} label="Wallpaper tags" value={recommendation?.wallpaper_tags.join(", ") ?? "Waiting"} />
-                </div>
-              </section>
             </div>
 
             <div className="grid explanationGrid">
@@ -649,17 +637,7 @@ function Tuning({ settings, updateSettings }: { settings: Settings; updateSettin
       </div>
       <div className="tuningLayout">
         <section className="subPanel">
-          <h3>Model</h3>
-          <label>
-            Classifier mode
-            <select
-              value={settings.classifierMode}
-              onChange={(event) => updateSettings({ classifierMode: event.target.value as Settings["classifierMode"] })}
-            >
-              <option value="embedding_primary">Embedding primary</option>
-              <option value="keyword_fallback">Keyword fallback</option>
-            </select>
-          </label>
+          <h3>Wallpaper Mood</h3>
           <label>
             Recommendation intensity
             <select
@@ -686,16 +664,6 @@ function Tuning({ settings, updateSettings }: { settings: Settings; updateSettin
               <option value="warm">Warm</option>
               <option value="neon">Neon</option>
               <option value="editorial">Editorial</option>
-            </select>
-          </label>
-          <label>
-            Wallpaper provider
-            <select
-              value={settings.wallpaperProvider}
-              onChange={(event) => updateSettings({ wallpaperProvider: event.target.value as Settings["wallpaperProvider"] })}
-            >
-              <option value="curated_unsplash">Curated Unsplash</option>
-              <option value="generated_future">Generated future</option>
             </select>
           </label>
           {Object.entries(settings.topicWeights).map(([topic, value]) => (
