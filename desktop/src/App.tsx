@@ -66,8 +66,16 @@ function App() {
   });
   const [feedbackState, setFeedbackState] = useState("");
   const [wallpaperState, setWallpaperState] = useState("");
-  const autoApplyStateRef = useRef<{ signature: string; appliedAt: number; inFlight: boolean }>({
-    signature: "",
+  const autoApplyStateRef = useRef<{
+    wallpaperSignature: string;
+    contextSignature: string;
+    lastEventId: number;
+    appliedAt: number;
+    inFlight: boolean;
+  }>({
+    wallpaperSignature: "",
+    contextSignature: "",
+    lastEventId: 0,
     appliedAt: 0,
     inFlight: false,
   });
@@ -83,8 +91,34 @@ function App() {
     ].join("|");
   }, []);
 
+  const buildContextSignature = useCallback(
+    (
+      nextRecommendation: DashboardData["recommendation"],
+      nextArcs: CurrentArc[],
+      nextEvents: RecentEvent[]
+    ) => {
+      if (!nextRecommendation) return "";
+      const topArc = nextArcs[0];
+      const latestEvent = nextEvents[0];
+      return [
+        nextRecommendation.primary_topic,
+        nextRecommendation.vibe,
+        topArc?.name ?? "no-arc",
+        topArc?.dominant_topic ?? "unknown",
+        topArc?.vibe ?? nextRecommendation.vibe,
+        latestEvent?.event_type ?? "no-event",
+        latestEvent?.category ?? "uncategorized",
+      ].join("|");
+    },
+    []
+  );
+
   const applyWallpaper = useCallback(
-    async (nextRecommendation: DashboardData["recommendation"], mode: "manual" | "auto") => {
+    async (
+      nextRecommendation: DashboardData["recommendation"],
+      mode: "manual" | "auto",
+      context?: { contextSignature?: string; lastEventId?: number }
+    ) => {
       if (!nextRecommendation) return false;
       const desktopBridge = (
         window as unknown as {
@@ -111,7 +145,9 @@ function App() {
       }
 
       const signature = buildWallpaperSignature(nextRecommendation);
-      autoApplyStateRef.current.signature = signature;
+      autoApplyStateRef.current.wallpaperSignature = signature;
+      autoApplyStateRef.current.contextSignature = context?.contextSignature ?? autoApplyStateRef.current.contextSignature;
+      autoApplyStateRef.current.lastEventId = context?.lastEventId ?? autoApplyStateRef.current.lastEventId;
       autoApplyStateRef.current.appliedAt = Date.now();
       setWallpaperState(mode === "auto" ? `Auto-applied wallpaper: ${response.message}` : response.message);
       return true;
@@ -120,25 +156,33 @@ function App() {
   );
 
   const maybeAutoApplyWallpaper = useCallback(
-    async (nextRecommendation: DashboardData["recommendation"]) => {
+    async (nextData: Pick<DashboardData, "recommendation" | "currentArcs" | "events">) => {
+      const nextRecommendation = nextData.recommendation;
       if (!settings?.autoApplyWallpaper || !nextRecommendation) return;
       if (autoApplyStateRef.current.inFlight) return;
 
-      const signature = buildWallpaperSignature(nextRecommendation);
-      if (!signature) return;
-      if (signature === autoApplyStateRef.current.signature) return;
+      const wallpaperSignature = buildWallpaperSignature(nextRecommendation);
+      const contextSignature = buildContextSignature(nextRecommendation, nextData.currentArcs, nextData.events);
+      const latestEventId = nextData.events[0]?.id ?? 0;
+      if (!wallpaperSignature || !contextSignature) return;
 
       const cooldownMs = Math.max(1, settings.wallpaperChangeCooldownMinutes) * 60 * 1000;
-      if (Date.now() - autoApplyStateRef.current.appliedAt < cooldownMs) return;
+      const firstAutoApply = autoApplyStateRef.current.appliedAt === 0;
+      const contextShifted = contextSignature !== autoApplyStateRef.current.contextSignature;
+      const newActivityObserved = latestEventId > autoApplyStateRef.current.lastEventId;
+      const wallpaperChanged = wallpaperSignature !== autoApplyStateRef.current.wallpaperSignature;
+
+      if (!firstAutoApply && (!contextShifted || !newActivityObserved || !wallpaperChanged)) return;
+      if (!firstAutoApply && Date.now() - autoApplyStateRef.current.appliedAt < cooldownMs) return;
 
       autoApplyStateRef.current.inFlight = true;
       try {
-        await applyWallpaper(nextRecommendation, "auto");
+        await applyWallpaper(nextRecommendation, "auto", { contextSignature, lastEventId: latestEventId });
       } finally {
         autoApplyStateRef.current.inFlight = false;
       }
     },
-    [applyWallpaper, buildWallpaperSignature, settings]
+    [applyWallpaper, buildContextSignature, buildWallpaperSignature, settings]
   );
 
   const refresh = useCallback(async () => {
@@ -154,7 +198,7 @@ function App() {
         currentArcs: data.currentArcs,
         sourceMix: data.sourceMix,
       });
-      void maybeAutoApplyWallpaper(data.recommendation);
+      void maybeAutoApplyWallpaper(data);
     } catch (error) {
       setDashboard((current) => ({
         ...current,
@@ -201,7 +245,10 @@ function App() {
     if (!recommendation) return;
     setWallpaperState("Applying wallpaper...");
     try {
-      await applyWallpaper(recommendation, "manual");
+      await applyWallpaper(recommendation, "manual", {
+        contextSignature: buildContextSignature(recommendation, dashboard.currentArcs, dashboard.events),
+        lastEventId: dashboard.events[0]?.id ?? 0,
+      });
     } catch (error) {
       setWallpaperState(error instanceof Error ? error.message : "Failed to set wallpaper.");
     }
