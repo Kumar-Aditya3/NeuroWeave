@@ -16,7 +16,7 @@ Topic = Literal[
 ]
 Sentiment = Literal["positive", "neutral", "negative"]
 Vibe = Literal["calm", "balanced", "intense", "dark"]
-FeedbackAction = Literal["keep", "skip", "like"]
+FeedbackAction = Literal["keep", "skip", "like", "tone_down"]
 ActivitySource = Literal[
     "browser_tab",
     "active_window",
@@ -105,6 +105,8 @@ class FeedbackRequest(BaseModel):
     user_id: str = Field(default="kumar")
     recommendation_topic: Topic
     action: FeedbackAction
+    recommendation_vibe: Optional[Vibe] = None
+    wallpaper_style: Optional[str] = None
 
 
 class HealthResponse(BaseModel):

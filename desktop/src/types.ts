@@ -90,6 +90,7 @@ export type Recommendation = {
     classifier_mode?: ClassifierMode;
     topic_weight_bias?: Record<Topic, number> | null;
     normalized_intensity?: "low" | "balanced" | "high";
+    preference_profile?: Record<string, Record<string, number>> | null;
   };
   session_context?: {
     signature: string;

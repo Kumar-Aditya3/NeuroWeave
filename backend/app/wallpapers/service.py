@@ -51,6 +51,7 @@ def build_wallpaper_payload(
     memory = recent_memory or []
     query_payload = build_wallpaper_query(topic, vibe, intensity, style, arc_name)
     query = query_payload["wallpaper_query"]
+    visual_grammar = query_payload.get("visual_grammar")
 
     style_key = style if style in styles.WALLPAPER_STYLE_HINTS else "minimal"
     repeated_count = _matching_memory_count(topic, vibe, style_key, provider, memory)
@@ -74,6 +75,7 @@ def build_wallpaper_payload(
             vibe=vibe,
             style=style_key,
             negative_prompt=query_payload.get("negative_prompt"),
+            visual_grammar=visual_grammar,
             seed_offset=seed_offset,
             base_url=preview_base_url,
         )
@@ -112,4 +114,5 @@ def build_wallpaper_payload(
         "prompt_components": prompt_components,
         "generation_metadata": generation_metadata,
         "novelty_context": novelty_context,
+        "visual_grammar": visual_grammar,
     }

@@ -47,13 +47,20 @@ export async function getDashboard(settings: Settings, limit = 24): Promise<Dash
   );
 }
 
-export async function sendFeedback(settings: Settings, topic: Topic, action: "like" | "skip"): Promise<void> {
+export async function sendFeedback(
+  settings: Settings,
+  topic: Topic,
+  action: "like" | "skip" | "tone_down",
+  extras?: { recommendationVibe?: Recommendation["vibe"]; wallpaperStyle?: Settings["wallpaperStyle"] }
+): Promise<void> {
   await request(settings, "/feedback", {
     method: "POST",
     body: JSON.stringify({
       user_id: settings.userId,
       recommendation_topic: topic,
-      action
+      action,
+      recommendation_vibe: extras?.recommendationVibe,
+      wallpaper_style: extras?.wallpaperStyle
     })
   });
 }

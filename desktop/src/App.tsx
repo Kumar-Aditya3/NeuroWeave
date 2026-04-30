@@ -241,9 +241,12 @@ function App() {
     setSettings(updated);
   }
 
-  async function handleFeedback(action: "like" | "skip", label: string) {
+  async function handleFeedback(action: "like" | "skip" | "tone_down", label: string) {
     if (!settings || !dashboard.recommendation) return;
-    await sendFeedback(settings, dashboard.recommendation.primary_topic, action);
+    await sendFeedback(settings, dashboard.recommendation.primary_topic, action, {
+      recommendationVibe: dashboard.recommendation.vibe,
+      wallpaperStyle: settings.wallpaperStyle,
+    });
     setFeedbackState(label);
     setTimeout(() => setFeedbackState(""), 1600);
   }
@@ -529,7 +532,7 @@ function App() {
                   <button onClick={() => handleFeedback("skip", "Marked as not me")} type="button">
                     <XCircle size={16} /> Not me
                   </button>
-                  <button onClick={() => handleFeedback("skip", "Intensity feedback saved")} type="button">
+                  <button onClick={() => handleFeedback("tone_down", "Intensity feedback saved")} type="button">
                     <AlertTriangle size={16} /> Too intense
                   </button>
                 </div>

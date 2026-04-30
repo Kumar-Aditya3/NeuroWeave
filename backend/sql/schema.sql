@@ -74,3 +74,13 @@ CREATE TABLE IF NOT EXISTS wallpaper_memory (
 
 CREATE INDEX IF NOT EXISTS idx_wallpaper_memory_user_created
 ON wallpaper_memory(user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS user_preferences (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    target_type TEXT NOT NULL,
+    target_key TEXT NOT NULL,
+    score REAL NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE (user_id, target_type, target_key)
+);

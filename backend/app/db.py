@@ -104,6 +104,19 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         ON wallpaper_memory(user_id, created_at DESC)
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user_preferences (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            target_type TEXT NOT NULL,
+            target_key TEXT NOT NULL,
+            score REAL NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE (user_id, target_type, target_key)
+        )
+        """
+    )
 
 
 def create_event(
@@ -270,7 +283,13 @@ def get_latest_vibe(user_id: str) -> str:
     return str(row["vibe"]) if row else "balanced"
 
 
-def create_feedback(user_id: str, recommendation_topic: str, action: str) -> None:
+def create_feedback(
+    user_id: str,
+    recommendation_topic: str,
+    action: str,
+    recommendation_vibe: str | None = None,
+    wallpaper_style: str | None = None,
+) -> None:
     with get_connection() as conn:
         conn.execute(
             """
@@ -280,6 +299,11 @@ def create_feedback(user_id: str, recommendation_topic: str, action: str) -> Non
             (user_id, recommendation_topic, action, utc_now_iso()),
         )
         conn.commit()
+    update_user_preference(user_id, "topic", recommendation_topic, action)
+    if recommendation_vibe:
+        update_user_preference(user_id, "vibe", recommendation_vibe, action)
+    if wallpaper_style:
+        update_user_preference(user_id, "style", wallpaper_style, action)
 
 
 def upsert_device(user_id: str, device_id: str, client_name: str) -> None:
@@ -526,3 +550,65 @@ def create_wallpaper_memory(
             ),
         )
         conn.commit()
+
+
+def update_user_preference(user_id: str, target_type: str, target_key: str, action: str) -> None:
+    delta_map = {
+        "like": 1.0,
+        "keep": 0.45,
+        "skip": -0.6,
+        "tone_down": -0.35,
+    }
+    delta = delta_map.get(action, 0.0)
+    if not delta:
+        return
+
+    now = utc_now_iso()
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT score
+            FROM user_preferences
+            WHERE user_id = ? AND target_type = ? AND target_key = ?
+            """,
+            (user_id, target_type, target_key),
+        ).fetchone()
+        if row is None:
+            score = delta
+            conn.execute(
+                """
+                INSERT INTO user_preferences (user_id, target_type, target_key, score, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (user_id, target_type, target_key, score, now),
+            )
+        else:
+            score = max(-4.0, min(4.0, float(row["score"]) * 0.92 + delta))
+            conn.execute(
+                """
+                UPDATE user_preferences
+                SET score = ?, updated_at = ?
+                WHERE user_id = ? AND target_type = ? AND target_key = ?
+                """,
+                (score, now, user_id, target_type, target_key),
+            )
+        conn.commit()
+
+
+def get_user_preference_profile(user_id: str) -> dict[str, dict[str, float]]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT target_type, target_key, score
+            FROM user_preferences
+            WHERE user_id = ?
+            """,
+            (user_id,),
+        ).fetchall()
+
+    profile: dict[str, dict[str, float]] = {}
+    for row in rows:
+        target_type = str(row["target_type"])
+        bucket = profile.setdefault(target_type, {})
+        bucket[str(row["target_key"])] = round(float(row["score"]), 4)
+    return profile

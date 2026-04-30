@@ -142,6 +142,7 @@ def render_procedural_wallpaper(
     vibe: str,
     style: str,
     palette: list[str],
+    visual_grammar: dict | None,
     seed: str,
     width: int = 1920,
     height: int = 1080,
@@ -188,6 +189,30 @@ def render_procedural_wallpaper(
             draw.regular_polygon((cx, cy, radius), n_sides=rng.choice([3, 4, 5]), rotation=rng.randint(0, 90), outline=_rgba(accent, 54), fill=_rgba((8, 10, 12), 18))
 
     _draw_topic_motif(draw, rng, topic=topic, width=width, height=height, color=accent, muted=muted)
+
+    grammar = visual_grammar or {}
+    topic_grammar = grammar.get("topic", {})
+    vibe_grammar = grammar.get("vibe", {})
+    intensity_grammar = grammar.get("intensity", {})
+    density_mode = str(topic_grammar.get("density") or "medium")
+    if density_mode == "high":
+        for _ in range(16):
+            cx = rng.randint(120, width - 120)
+            cy = rng.randint(90, height - 90)
+            draw.line((cx, cy, cx + rng.randint(-240, 240), cy + rng.randint(-140, 140)), fill=_rgba(accent, 38), width=2)
+    elif density_mode == "low":
+        for _ in range(6):
+            cx = rng.randint(180, width - 180)
+            cy = rng.randint(140, height - 140)
+            draw.ellipse((cx - 90, cy - 90, cx + 90, cy + 90), outline=_rgba(accent, 24), width=2)
+
+    if str(vibe_grammar.get("contrast")) == "high":
+        draw.rectangle((0, 0, width, height), fill=(0, 0, 0, 18))
+    elif str(vibe_grammar.get("contrast")) == "soft":
+        draw.rectangle((0, 0, width, height), fill=(255, 255, 255, 10))
+
+    if str(intensity_grammar.get("negative_space")) == "compressed":
+        draw.rectangle((54, 54, width - 54, height - 54), outline=_rgba(accent, 60), width=2)
 
     if style == "neon":
         glow = overlay.filter(ImageFilter.GaussianBlur(radius=18))

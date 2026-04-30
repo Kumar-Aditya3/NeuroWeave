@@ -17,6 +17,7 @@ from .db import (
     get_latest_vibe,
     get_recent_event_payloads,
     get_recent_events,
+    get_user_preference_profile,
     get_user_sources,
     get_wallpaper_memory,
     get_weighted_profile,
@@ -117,6 +118,19 @@ def normalize_recommendation_intensity(value: str) -> str:
         "high": "high",
     }
     return aliases.get(raw, "balanced")
+
+
+def apply_feedback_intensity_bias(intensity: str, preference_profile: dict[str, dict[str, float]]) -> str:
+    vibe_preferences = preference_profile.get("vibe", {})
+    dark_penalty = float(vibe_preferences.get("dark", 0.0))
+    intense_penalty = float(vibe_preferences.get("intense", 0.0))
+    calm_affinity = float(vibe_preferences.get("calm", 0.0))
+
+    if intensity == "high" and (intense_penalty < -0.45 or dark_penalty < -0.45):
+        return "balanced"
+    if intensity == "balanced" and calm_affinity > 0.9:
+        return "low"
+    return intensity
 
 
 def parse_topic_weights(topic_weights_json: str | None) -> dict[str, float]:
@@ -221,6 +235,7 @@ def build_context_recommendation(
 ) -> ContextRecommendation:
     recent_payloads = recent_payloads if recent_payloads is not None else load_recent_event_window(user_id, limit=48)
     profile = get_weighted_profile(user_id)
+    preference_profile = get_user_preference_profile(user_id)
     if current_arcs is None:
         current_arcs = get_adaptive_arcs(user_id, classifier_mode=classifier_mode, recent_payloads=recent_payloads)
     session_context = build_session_context(recent_payloads, current_arcs)
@@ -258,7 +273,10 @@ def build_context_recommendation(
         explanation = "Using historical profile because recent events are sparse."
 
     profile = apply_topic_weight_bias(profile, topic_weights)
-    normalized_intensity = normalize_recommendation_intensity(recommendation_intensity)
+    normalized_intensity = apply_feedback_intensity_bias(
+        normalize_recommendation_intensity(recommendation_intensity),
+        preference_profile,
+    )
 
     primary_topic = "unknown"
     if profile and max(profile.values()) > 0:
@@ -290,6 +308,8 @@ def build_context_recommendation(
         f"{explanation} Session: {session_context['kind']} / {session_context['dominant_category']} / "
         f"stability {session_context['stability']:.2f}."
     )
+    if preference_profile:
+        explanation = f"{explanation} Preference memory is active."
     
     # Build classification confidence metadata
     classification_confidence = {
@@ -298,6 +318,7 @@ def build_context_recommendation(
         "classifier_mode": classifier_mode,
         "topic_weight_bias": {topic: topic_weights.get(topic, DEFAULT_TOPIC_WEIGHT) for topic in TOPIC_KEYWORDS.keys()} if topic_weights else None,
         "normalized_intensity": normalized_intensity,
+        "preference_profile": preference_profile or None,
     }
     
     return ContextRecommendation(
@@ -743,6 +764,8 @@ def feedback(
         user_id=payload.user_id,
         recommendation_topic=payload.recommendation_topic,
         action=payload.action,
+        recommendation_vibe=payload.recommendation_vibe,
+        wallpaper_style=payload.wallpaper_style,
     )
     mirror_feedback(
         {
