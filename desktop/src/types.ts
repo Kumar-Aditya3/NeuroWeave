@@ -21,6 +21,8 @@ export type Settings = {
   apiKey: string;
   userId: string;
   refreshIntervalSeconds: number;
+  autoApplyWallpaper: boolean;
+  wallpaperChangeCooldownMinutes: number;
   themeMode: ThemeMode;
   consoleDensity: ConsoleDensity;
   recommendationIntensity: RecommendationIntensity;

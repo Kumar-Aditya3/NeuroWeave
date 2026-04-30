@@ -19,6 +19,8 @@ type Settings = {
   apiKey: string;
   userId: string;
   refreshIntervalSeconds: number;
+  autoApplyWallpaper: boolean;
+  wallpaperChangeCooldownMinutes: number;
   themeMode: ThemeMode;
   consoleDensity: ConsoleDensity;
   recommendationIntensity: Intensity;
@@ -38,6 +40,8 @@ const defaults: Settings = {
   apiKey: "dev-local-key",
   userId: "kumar",
   refreshIntervalSeconds: 5,
+  autoApplyWallpaper: false,
+  wallpaperChangeCooldownMinutes: 20,
   themeMode: "dark",
   consoleDensity: "comfortable",
   recommendationIntensity: "balanced",

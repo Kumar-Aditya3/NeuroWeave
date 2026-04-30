@@ -22,7 +22,7 @@ import {
   Wallpaper,
   XCircle,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { loadDashboard, sendFeedback } from "./api/client";
 import type { CurrentArc, DashboardData, RecentEvent, Settings, SourceMix, Topic, WallpaperSetResponse } from "./types";
 
@@ -66,6 +66,80 @@ function App() {
   });
   const [feedbackState, setFeedbackState] = useState("");
   const [wallpaperState, setWallpaperState] = useState("");
+  const autoApplyStateRef = useRef<{ signature: string; appliedAt: number; inFlight: boolean }>({
+    signature: "",
+    appliedAt: 0,
+    inFlight: false,
+  });
+
+  const buildWallpaperSignature = useCallback((nextRecommendation: DashboardData["recommendation"]) => {
+    if (!nextRecommendation) return "";
+    return [
+      nextRecommendation.primary_topic,
+      nextRecommendation.vibe,
+      nextRecommendation.wallpaper_provider,
+      nextRecommendation.wallpaper_query,
+      nextRecommendation.wallpaper_cached_path ?? nextRecommendation.wallpaper_preview_url,
+    ].join("|");
+  }, []);
+
+  const applyWallpaper = useCallback(
+    async (nextRecommendation: DashboardData["recommendation"], mode: "manual" | "auto") => {
+      if (!nextRecommendation) return false;
+      const desktopBridge = (
+        window as unknown as {
+          neuroWeaveDesktop?: {
+            setWallpaper: (payload: { previewUrl?: string; cachedPath?: string | null }) => Promise<WallpaperSetResponse>;
+          };
+        }
+      ).neuroWeaveDesktop;
+      if (!desktopBridge?.setWallpaper) {
+        if (mode === "manual") {
+          setWallpaperState("Desktop integration is unavailable. Launch the Electron app build and retry.");
+        }
+        return false;
+      }
+
+      const response = await desktopBridge.setWallpaper({
+        previewUrl: nextRecommendation.wallpaper_preview_url,
+        cachedPath: nextRecommendation.wallpaper_cached_path,
+      });
+      if (!response.ok) {
+        const details = response.primaryError ? ` (${response.primaryError})` : "";
+        setWallpaperState(`${response.message}${details}`);
+        return false;
+      }
+
+      const signature = buildWallpaperSignature(nextRecommendation);
+      autoApplyStateRef.current.signature = signature;
+      autoApplyStateRef.current.appliedAt = Date.now();
+      setWallpaperState(mode === "auto" ? `Auto-applied wallpaper: ${response.message}` : response.message);
+      return true;
+    },
+    [buildWallpaperSignature]
+  );
+
+  const maybeAutoApplyWallpaper = useCallback(
+    async (nextRecommendation: DashboardData["recommendation"]) => {
+      if (!settings?.autoApplyWallpaper || !nextRecommendation) return;
+      if (autoApplyStateRef.current.inFlight) return;
+
+      const signature = buildWallpaperSignature(nextRecommendation);
+      if (!signature) return;
+      if (signature === autoApplyStateRef.current.signature) return;
+
+      const cooldownMs = Math.max(1, settings.wallpaperChangeCooldownMinutes) * 60 * 1000;
+      if (Date.now() - autoApplyStateRef.current.appliedAt < cooldownMs) return;
+
+      autoApplyStateRef.current.inFlight = true;
+      try {
+        await applyWallpaper(nextRecommendation, "auto");
+      } finally {
+        autoApplyStateRef.current.inFlight = false;
+      }
+    },
+    [applyWallpaper, buildWallpaperSignature, settings]
+  );
 
   const refresh = useCallback(async () => {
     if (!settings) return;
@@ -80,6 +154,7 @@ function App() {
         currentArcs: data.currentArcs,
         sourceMix: data.sourceMix,
       });
+      void maybeAutoApplyWallpaper(data.recommendation);
     } catch (error) {
       setDashboard((current) => ({
         ...current,
@@ -87,7 +162,7 @@ function App() {
         error: error instanceof Error ? error.message : "Backend unreachable",
       }));
     }
-  }, [settings]);
+  }, [maybeAutoApplyWallpaper, settings]);
 
   useEffect(() => {
     window.neuroWeaveSettings.get().then(setSettings);
@@ -124,29 +199,9 @@ function App() {
 
   async function handleSetDesktop() {
     if (!recommendation) return;
-    const desktopBridge = (
-      window as unknown as {
-        neuroWeaveDesktop?: {
-          setWallpaper: (payload: { previewUrl?: string; cachedPath?: string | null }) => Promise<WallpaperSetResponse>;
-        };
-      }
-    ).neuroWeaveDesktop;
-    if (!desktopBridge?.setWallpaper) {
-      setWallpaperState("Desktop integration is unavailable. Launch the Electron app build and retry.");
-      return;
-    }
     setWallpaperState("Applying wallpaper...");
     try {
-      const response = await desktopBridge.setWallpaper({
-        previewUrl: recommendation.wallpaper_preview_url,
-        cachedPath: recommendation.wallpaper_cached_path,
-      });
-      if (response.ok) {
-        setWallpaperState(response.message);
-      } else {
-        const details = response.primaryError ? ` (${response.primaryError})` : "";
-        setWallpaperState(`${response.message}${details}`);
-      }
+      await applyWallpaper(recommendation, "manual");
     } catch (error) {
       setWallpaperState(error instanceof Error ? error.message : "Failed to set wallpaper.");
     }
@@ -705,6 +760,29 @@ function SettingsView({ settings, updateSettings }: { settings: Settings; update
             <option value={5}>5 seconds</option>
             <option value={10}>10 seconds</option>
             <option value={30}>30 seconds</option>
+          </select>
+        </label>
+        <label>
+          Auto-apply wallpaper
+          <select
+            value={settings.autoApplyWallpaper ? "enabled" : "disabled"}
+            onChange={(event) => updateSettings({ autoApplyWallpaper: event.target.value === "enabled" })}
+          >
+            <option value="disabled">Disabled</option>
+            <option value="enabled">Enabled</option>
+          </select>
+        </label>
+        <label>
+          Wallpaper cooldown
+          <select
+            value={settings.wallpaperChangeCooldownMinutes}
+            onChange={(event) => updateSettings({ wallpaperChangeCooldownMinutes: Number(event.target.value) })}
+          >
+            <option value={5}>5 minutes</option>
+            <option value={10}>10 minutes</option>
+            <option value={20}>20 minutes</option>
+            <option value={30}>30 minutes</option>
+            <option value={60}>60 minutes</option>
           </select>
         </label>
         <label>
