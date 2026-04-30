@@ -86,6 +86,8 @@ export type Recommendation = {
     topic_scores_all?: Record<Topic, number>;
     primary_topic_confidence?: number;
     classifier_mode?: ClassifierMode;
+    topic_weight_bias?: Record<Topic, number> | null;
+    normalized_intensity?: "low" | "balanced" | "high";
   };
 };
 

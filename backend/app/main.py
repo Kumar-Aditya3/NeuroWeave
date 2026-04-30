@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import json
 from hashlib import sha256
 from pathlib import Path
 from typing import Dict
@@ -67,6 +68,7 @@ TOPIC_KEYWORDS = {
 }
 DEDUPE_BUCKET_SECONDS = 300
 WALLPAPER_CACHE_ROOT = Path(__file__).resolve().parents[1] / "wallpaper_cache"
+DEFAULT_TOPIC_WEIGHT = 50.0
 
 
 def recommendation_map(primary_topic: str, vibe: str) -> Dict[str, object]:
@@ -97,6 +99,55 @@ def recommendation_map(primary_topic: str, vibe: str) -> Dict[str, object]:
         "music_mood": music_by_vibe.get(vibe, "indie / instrumental"),
         "quote_style": quote_by_vibe.get(vibe, "practical and focused"),
     }
+
+
+def normalize_recommendation_intensity(value: str) -> str:
+    raw = (value or "").strip().lower()
+    aliases = {
+        "calm": "low",
+        "low": "low",
+        "balanced": "balanced",
+        "strong": "high",
+        "high": "high",
+    }
+    return aliases.get(raw, "balanced")
+
+
+def parse_topic_weights(topic_weights_json: str | None) -> dict[str, float]:
+    if not topic_weights_json:
+        return {}
+    try:
+        payload = json.loads(topic_weights_json)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+
+    parsed: dict[str, float] = {}
+    for topic in TOPIC_KEYWORDS.keys():
+        raw_value = payload.get(topic)
+        if raw_value is None:
+            continue
+        try:
+            numeric = float(raw_value)
+        except (TypeError, ValueError):
+            continue
+        parsed[topic] = max(0.0, min(100.0, numeric))
+    return parsed
+
+
+def apply_topic_weight_bias(scores: Dict[str, float], topic_weights: dict[str, float] | None) -> Dict[str, float]:
+    if not scores:
+        return scores
+    topic_weights = topic_weights or {}
+    weighted: Dict[str, float] = {}
+    for topic, score in scores.items():
+        slider_value = topic_weights.get(topic, DEFAULT_TOPIC_WEIGHT)
+        multiplier = 0.5 + (slider_value / 100.0)
+        weighted[topic] = float(score) * multiplier
+
+    total = sum(weighted.values()) or 1.0
+    return {topic: round(value / total, 4) for topic, value in weighted.items()}
 
 
 def normalize_created_at(timestamp: datetime | None) -> str:
@@ -158,6 +209,7 @@ def build_context_recommendation(
     recommendation_intensity: str = "balanced",
     wallpaper_style: str = "minimal",
     wallpaper_provider: str = "generated_future",
+    topic_weights: dict[str, float] | None = None,
     recent_payloads: list[dict] | None = None,
     current_arcs: list[dict] | None = None,
 ) -> ContextRecommendation:
@@ -191,11 +243,15 @@ def build_context_recommendation(
 
         total = sum(recency_weighted.values()) or 1.0
         profile = {topic: round(value / total, 4) for topic, value in recency_weighted.items()}
+        profile = apply_topic_weight_bias(profile, topic_weights)
         vibe = max(vibe_weighted, key=vibe_weighted.get)
         explanation = "Recent signals: " + "; ".join(reason_parts) if reason_parts else "Recent signals are still warming up."
     else:
         vibe = get_latest_vibe(user_id)
         explanation = "Using historical profile because recent events are sparse."
+
+    profile = apply_topic_weight_bias(profile, topic_weights)
+    normalized_intensity = normalize_recommendation_intensity(recommendation_intensity)
 
     primary_topic = "unknown"
     if profile and max(profile.values()) > 0:
@@ -205,7 +261,7 @@ def build_context_recommendation(
     wallpaper = build_wallpaper_payload(
         primary_topic,
         vibe,
-        recommendation_intensity,
+        normalized_intensity,
         wallpaper_style,
         provider=wallpaper_provider,
         arc_name=top_arc_name,
@@ -229,6 +285,8 @@ def build_context_recommendation(
         "topic_scores_all": {k: round(v, 4) for k, v in profile.items()},
         "primary_topic_confidence": profile.get(primary_topic, 0.0),
         "classifier_mode": classifier_mode,
+        "topic_weight_bias": {topic: topic_weights.get(topic, DEFAULT_TOPIC_WEIGHT) for topic in TOPIC_KEYWORDS.keys()} if topic_weights else None,
+        "normalized_intensity": normalized_intensity,
     }
     
     return ContextRecommendation(
@@ -560,14 +618,17 @@ def recommend_context(
     recommendation_intensity: str = "balanced",
     wallpaper_style: str = "minimal",
     wallpaper_provider: str = "generated_future",
+    topic_weights_json: str | None = None,
     _: str = Depends(require_api_key),
 ) -> ContextRecommendation:
+    topic_weights = parse_topic_weights(topic_weights_json)
     return build_context_recommendation(
         user_id,
         classifier_mode=classifier_mode,
         recommendation_intensity=recommendation_intensity,
         wallpaper_style=wallpaper_style,
         wallpaper_provider=wallpaper_provider,
+        topic_weights=topic_weights,
     )
 
 
@@ -619,8 +680,10 @@ def me_dashboard(
     recommendation_intensity: str = "balanced",
     wallpaper_style: str = "minimal",
     wallpaper_provider: str = "generated_future",
+    topic_weights_json: str | None = None,
     _: str = Depends(require_api_key),
 ) -> DashboardResponse:
+    topic_weights = parse_topic_weights(topic_weights_json)
     recent_events = get_recent_events(user_id, limit)
     recent_payloads = get_recent_event_payloads(user_id, limit=48)
     current_arcs = get_adaptive_arcs(
@@ -636,6 +699,7 @@ def me_dashboard(
             recommendation_intensity=recommendation_intensity,
             wallpaper_style=wallpaper_style,
             wallpaper_provider=wallpaper_provider,
+            topic_weights=topic_weights,
             recent_payloads=recent_payloads,
             current_arcs=current_arcs,
         ),

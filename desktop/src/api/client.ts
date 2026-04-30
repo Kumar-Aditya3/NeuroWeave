@@ -35,13 +35,15 @@ export async function getSources(settings: Settings): Promise<SourcesResponse> {
 }
 
 export async function getDashboard(settings: Settings, limit = 24): Promise<DashboardResponse> {
+  const topicWeightsJson = encodeURIComponent(JSON.stringify(settings.topicWeights));
   return request(
     settings,
     `/me/dashboard?user_id=${encodeURIComponent(settings.userId)}&limit=${limit}` +
       `&classifier_mode=${encodeURIComponent(settings.classifierMode)}` +
       `&recommendation_intensity=${encodeURIComponent(settings.recommendationIntensity)}` +
       `&wallpaper_style=${encodeURIComponent(settings.wallpaperStyle)}` +
-      `&wallpaper_provider=${encodeURIComponent(settings.wallpaperProvider)}`
+      `&wallpaper_provider=${encodeURIComponent(settings.wallpaperProvider)}` +
+      `&topic_weights_json=${topicWeightsJson}`
   );
 }
 
