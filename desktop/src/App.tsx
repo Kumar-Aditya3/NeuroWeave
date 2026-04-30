@@ -98,6 +98,10 @@ function App() {
       nextEvents: RecentEvent[]
     ) => {
       if (!nextRecommendation) return "";
+      const sessionSignature = nextRecommendation.session_context?.signature;
+      if (sessionSignature) {
+        return sessionSignature;
+      }
       const topArc = nextArcs[0];
       const latestEvent = nextEvents[0];
       return [
@@ -164,6 +168,7 @@ function App() {
       const wallpaperSignature = buildWallpaperSignature(nextRecommendation);
       const contextSignature = buildContextSignature(nextRecommendation, nextData.currentArcs, nextData.events);
       const latestEventId = nextData.events[0]?.id ?? 0;
+      const sessionContext = nextRecommendation.session_context;
       if (!wallpaperSignature || !contextSignature) return;
 
       const cooldownMs = Math.max(1, settings.wallpaperChangeCooldownMinutes) * 60 * 1000;
@@ -171,8 +176,10 @@ function App() {
       const contextShifted = contextSignature !== autoApplyStateRef.current.contextSignature;
       const newActivityObserved = latestEventId > autoApplyStateRef.current.lastEventId;
       const wallpaperChanged = wallpaperSignature !== autoApplyStateRef.current.wallpaperSignature;
+      const stableEnough = (sessionContext?.stability ?? 0) >= 0.42;
+      const meaningfulShift = (sessionContext?.shift_score ?? 0) >= 0.55 || (sessionContext?.event_streak ?? 0) >= 2;
 
-      if (!firstAutoApply && (!contextShifted || !newActivityObserved || !wallpaperChanged)) return;
+      if (!firstAutoApply && (!contextShifted || !newActivityObserved || !wallpaperChanged || !stableEnough || !meaningfulShift)) return;
       if (!firstAutoApply && Date.now() - autoApplyStateRef.current.appliedAt < cooldownMs) return;
 
       autoApplyStateRef.current.inFlight = true;

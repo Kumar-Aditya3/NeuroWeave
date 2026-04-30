@@ -91,6 +91,16 @@ export type Recommendation = {
     topic_weight_bias?: Record<Topic, number> | null;
     normalized_intensity?: "low" | "balanced" | "high";
   };
+  session_context?: {
+    signature: string;
+    kind: string;
+    stability: number;
+    shift_score: number;
+    event_streak: number;
+    minutes_covered: number;
+    dominant_category: string;
+    dominant_process: string;
+  };
 };
 
 export type RecentEvent = {

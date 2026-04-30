@@ -98,6 +98,7 @@ class ContextRecommendation(BaseModel):
     generation_metadata: Optional[dict] = None
     novelty_context: Optional[dict] = None
     classification_confidence: Optional[dict] = None
+    session_context: Optional[dict] = None
 
 
 class FeedbackRequest(BaseModel):

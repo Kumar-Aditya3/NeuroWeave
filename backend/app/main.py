@@ -223,6 +223,7 @@ def build_context_recommendation(
     profile = get_weighted_profile(user_id)
     if current_arcs is None:
         current_arcs = get_adaptive_arcs(user_id, classifier_mode=classifier_mode, recent_payloads=recent_payloads)
+    session_context = build_session_context(recent_payloads, current_arcs)
     if recent_payloads:
         recency_weighted: Dict[str, float] = {topic: 0.0 for topic in TOPIC_KEYWORDS.keys()}
         vibe_weighted: Dict[str, float] = {"calm": 0.0, "balanced": 0.0, "intense": 0.0, "dark": 0.0}
@@ -285,6 +286,10 @@ def build_context_recommendation(
     )
     if top_arc_name:
         explanation = f"{explanation} Active arc: {top_arc_name}."
+    explanation = (
+        f"{explanation} Session: {session_context['kind']} / {session_context['dominant_category']} / "
+        f"stability {session_context['stability']:.2f}."
+    )
     
     # Build classification confidence metadata
     classification_confidence = {
@@ -317,6 +322,7 @@ def build_context_recommendation(
         generation_metadata=wallpaper.get("generation_metadata"),
         novelty_context=wallpaper.get("novelty_context"),
         classification_confidence=classification_confidence,
+        session_context=session_context,
     )
 
 
@@ -342,6 +348,82 @@ def build_source_mix(events: list[dict]) -> dict:
         else:
             mix["app"] += 1
     return mix
+
+
+def build_session_context(recent_payloads: list[dict], current_arcs: list[dict] | None = None) -> dict:
+    if not recent_payloads:
+        return {
+            "signature": "empty",
+            "kind": "warming_up",
+            "stability": 0.0,
+            "shift_score": 0.0,
+            "event_streak": 0,
+            "minutes_covered": 0.0,
+            "dominant_category": "unknown",
+            "dominant_process": "unknown",
+        }
+
+    window = recent_payloads[:12]
+    category_counts: Dict[str, float] = {}
+    process_counts: Dict[str, float] = {}
+    first_signature = None
+    streak = 0
+    timestamps: list[datetime] = []
+
+    for index, payload in enumerate(window):
+        weight = max(0.25, 1.0 - (index * 0.08))
+        category = str(payload.get("category") or payload.get("event_type") or "unknown")
+        process = str(payload.get("process_name") or payload.get("source") or "unknown")
+        signature = f"{category}|{process}"
+        category_counts[category] = category_counts.get(category, 0.0) + weight
+        process_counts[process] = process_counts.get(process, 0.0) + weight
+        if first_signature is None:
+            first_signature = signature
+        if signature == first_signature:
+            streak += 1
+        try:
+            timestamps.append(datetime.fromisoformat(str(payload.get("created_at", "")).replace("Z", "+00:00")))
+        except ValueError:
+            continue
+
+    dominant_category = max(category_counts, key=category_counts.get)
+    dominant_process = max(process_counts, key=process_counts.get)
+    first_half = window[: max(1, len(window) // 2)]
+    second_half = window[max(1, len(window) // 2) :]
+    lead_category = first_half[0].get("category") or first_half[0].get("event_type") or "unknown"
+    tail_category = second_half[-1].get("category") or second_half[-1].get("event_type") or lead_category
+    shift_score = 0.25 if lead_category == tail_category else 0.72
+    minutes_covered = 0.0
+    if len(timestamps) >= 2:
+        newest = max(timestamps)
+        oldest = min(timestamps)
+        minutes_covered = max(0.0, (newest - oldest).total_seconds() / 60.0)
+    stability = min(
+        1.0,
+        (streak / max(1, len(window))) * 0.45
+        + (category_counts[dominant_category] / max(1.0, sum(category_counts.values()))) * 0.35
+        + min(1.0, minutes_covered / 45.0) * 0.2,
+    )
+    top_arc = current_arcs[0]["name"] if current_arcs else "general_flow"
+    signature = "|".join(
+        [
+            top_arc,
+            str(dominant_category),
+            str(dominant_process),
+            str(streak),
+            "shift" if shift_score >= 0.55 else "steady",
+        ]
+    )
+    return {
+        "signature": signature,
+        "kind": top_arc,
+        "stability": round(stability, 4),
+        "shift_score": round(shift_score, 4),
+        "event_streak": streak,
+        "minutes_covered": round(minutes_covered, 2),
+        "dominant_category": dominant_category,
+        "dominant_process": dominant_process,
+    }
 
 
 def load_recent_events_feed(user_id: str, limit: int) -> list[dict]:
