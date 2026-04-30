@@ -39,7 +39,13 @@ from .models import (
     RecentEventsResponse,
     SourcesResponse,
 )
-from .supabase_mirror import mirror_device, mirror_event, mirror_feedback
+from .supabase_mirror import (
+    fetch_recent_event_payloads as fetch_supabase_recent_event_payloads,
+    fetch_recent_events as fetch_supabase_recent_events,
+    mirror_device,
+    mirror_event,
+    mirror_feedback,
+)
 from .wallpapers import build_wallpaper_payload
 
 TOPIC_KEYWORDS = {
@@ -213,7 +219,7 @@ def build_context_recommendation(
     recent_payloads: list[dict] | None = None,
     current_arcs: list[dict] | None = None,
 ) -> ContextRecommendation:
-    recent_payloads = recent_payloads if recent_payloads is not None else get_recent_event_payloads(user_id, limit=48)
+    recent_payloads = recent_payloads if recent_payloads is not None else load_recent_event_window(user_id, limit=48)
     profile = get_weighted_profile(user_id)
     if current_arcs is None:
         current_arcs = get_adaptive_arcs(user_id, classifier_mode=classifier_mode, recent_payloads=recent_payloads)
@@ -336,6 +342,20 @@ def build_source_mix(events: list[dict]) -> dict:
         else:
             mix["app"] += 1
     return mix
+
+
+def load_recent_events_feed(user_id: str, limit: int) -> list[dict]:
+    remote_events = fetch_supabase_recent_events(user_id, limit=limit)
+    if remote_events:
+        return remote_events
+    return get_recent_events(user_id, limit)
+
+
+def load_recent_event_window(user_id: str, limit: int = 48) -> list[dict]:
+    remote_payloads = fetch_supabase_recent_event_payloads(user_id, limit=limit)
+    if remote_payloads:
+        return remote_payloads
+    return get_recent_event_payloads(user_id, limit=limit)
 
 
 def get_adaptive_arcs(
@@ -668,7 +688,7 @@ def me_recent_events(
     limit: int = 20,
     _: str = Depends(require_api_key),
 ) -> RecentEventsResponse:
-    events = get_recent_events(user_id, limit)
+    events = load_recent_events_feed(user_id, limit)
     return RecentEventsResponse(user_id=user_id, events=events)
 
 
@@ -684,8 +704,8 @@ def me_dashboard(
     _: str = Depends(require_api_key),
 ) -> DashboardResponse:
     topic_weights = parse_topic_weights(topic_weights_json)
-    recent_events = get_recent_events(user_id, limit)
-    recent_payloads = get_recent_event_payloads(user_id, limit=48)
+    recent_events = load_recent_events_feed(user_id, limit)
+    recent_payloads = load_recent_event_window(user_id, limit=48)
     current_arcs = get_adaptive_arcs(
         user_id,
         classifier_mode=classifier_mode,
