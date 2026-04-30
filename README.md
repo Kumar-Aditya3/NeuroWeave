@@ -2,7 +2,7 @@
 
 NeuroWeave is a context-aware personalization stack that ingests opt-in activity from multiple devices, builds short-term and long-term preference signals, and generates adaptive recommendations such as desktop wallpaper mood.
 
-## 🚀 Quick Start (Portable Setup)
+##  Quick Start (Portable Setup)
 
 Want to get started quickly? Just copy the folder to another PC:
 
