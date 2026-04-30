@@ -76,11 +76,22 @@ create table if not exists public.arc_centroids (
   unique (user_id, arc_name)
 );
 
+create table if not exists public.user_preferences (
+  id bigint generated always as identity primary key,
+  user_id text not null,
+  target_type text not null,
+  target_key text not null,
+  score double precision not null,
+  updated_at timestamptz not null default now(),
+  unique (user_id, target_type, target_key)
+);
+
 alter table public.events_raw enable row level security;
 alter table public.devices_state enable row level security;
 alter table public.feedback_events enable row level security;
 alter table public.wallpaper_memory enable row level security;
 alter table public.arc_centroids enable row level security;
+alter table public.user_preferences enable row level security;
 
 -- Application service role can bypass RLS; these policies allow future authenticated clients.
 drop policy if exists events_raw_user_policy on public.events_raw;
@@ -113,6 +124,12 @@ for all
 using (auth.uid()::text = user_id)
 with check (auth.uid()::text = user_id);
 
+drop policy if exists user_preferences_user_policy on public.user_preferences;
+create policy user_preferences_user_policy on public.user_preferences
+for all
+using (auth.uid()::text = user_id)
+with check (auth.uid()::text = user_id);
+
 create or replace function public.neuroweave_purge_old_data() returns void
 language plpgsql
 as $$
@@ -120,6 +137,7 @@ begin
   delete from public.events_raw where created_at < now() - interval '14 days';
   delete from public.wallpaper_memory where created_at < now() - interval '30 days';
   delete from public.feedback_events where created_at < now() - interval '30 days';
+  delete from public.user_preferences where updated_at < now() - interval '90 days';
 end;
 $$;
 

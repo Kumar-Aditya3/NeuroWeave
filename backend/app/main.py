@@ -41,11 +41,17 @@ from .models import (
     SourcesResponse,
 )
 from .supabase_mirror import (
+    fetch_arc_centroids as fetch_supabase_arc_centroids,
     fetch_recent_event_payloads as fetch_supabase_recent_event_payloads,
     fetch_recent_events as fetch_supabase_recent_events,
+    fetch_user_preferences as fetch_supabase_user_preferences,
+    fetch_wallpaper_memory as fetch_supabase_wallpaper_memory,
+    mirror_arc_centroids,
     mirror_device,
     mirror_event,
     mirror_feedback,
+    mirror_user_preferences,
+    mirror_wallpaper_memory,
 )
 from .wallpapers import build_wallpaper_payload
 
@@ -235,7 +241,7 @@ def build_context_recommendation(
 ) -> ContextRecommendation:
     recent_payloads = recent_payloads if recent_payloads is not None else load_recent_event_window(user_id, limit=48)
     profile = get_weighted_profile(user_id)
-    preference_profile = get_user_preference_profile(user_id)
+    preference_profile = load_preference_profile(user_id)
     if current_arcs is None:
         current_arcs = get_adaptive_arcs(user_id, classifier_mode=classifier_mode, recent_payloads=recent_payloads)
     session_context = build_session_context(recent_payloads, current_arcs)
@@ -290,7 +296,7 @@ def build_context_recommendation(
         wallpaper_style,
         provider=wallpaper_provider,
         arc_name=top_arc_name,
-        recent_memory=get_wallpaper_memory(user_id, limit=36),
+        recent_memory=load_wallpaper_memory(user_id, limit=36),
         preview_base_url="http://127.0.0.1:8000",
     )
     create_wallpaper_memory(
@@ -302,6 +308,32 @@ def build_context_recommendation(
         wallpaper_query=wallpaper["wallpaper_query"],
         wallpaper_preview_url=wallpaper.get("wallpaper_preview_url"),
     )
+    mirror_wallpaper_memory(
+        {
+            "user_id": user_id,
+            "topic": primary_topic,
+            "vibe": vibe,
+            "style": wallpaper_style,
+            "provider": wallpaper["wallpaper_provider"],
+            "wallpaper_query": wallpaper["wallpaper_query"],
+            "wallpaper_preview_url": wallpaper.get("wallpaper_preview_url"),
+            "created_at": utc_now_iso(),
+        }
+    )
+    if preference_profile:
+        mirror_user_preferences(
+            [
+                {
+                    "user_id": user_id,
+                    "target_type": target_type,
+                    "target_key": target_key,
+                    "score": score,
+                    "updated_at": utc_now_iso(),
+                }
+                for target_type, bucket in preference_profile.items()
+                for target_key, score in bucket.items()
+            ]
+        )
     if top_arc_name:
         explanation = f"{explanation} Active arc: {top_arc_name}."
     explanation = (
@@ -461,13 +493,34 @@ def load_recent_event_window(user_id: str, limit: int = 48) -> list[dict]:
     return get_recent_event_payloads(user_id, limit=limit)
 
 
+def load_wallpaper_memory(user_id: str, limit: int = 36) -> list[dict]:
+    local_memory = get_wallpaper_memory(user_id, limit=limit)
+    if local_memory:
+        return local_memory
+    return fetch_supabase_wallpaper_memory(user_id, limit=limit)
+
+
+def load_arc_centroid_state(user_id: str) -> dict[str, dict]:
+    local_centroids = get_arc_centroids(user_id)
+    if local_centroids:
+        return local_centroids
+    return fetch_supabase_arc_centroids(user_id)
+
+
+def load_preference_profile(user_id: str) -> dict[str, dict[str, float]]:
+    local_profile = get_user_preference_profile(user_id)
+    if local_profile:
+        return local_profile
+    return fetch_supabase_user_preferences(user_id)
+
+
 def get_adaptive_arcs(
     user_id: str,
     classifier_mode: str,
     recent_payloads: list[dict] | None = None,
 ) -> list[dict]:
     payloads = recent_payloads if recent_payloads is not None else get_recent_event_payloads(user_id, limit=48)
-    stored_centroids = get_arc_centroids(user_id)
+    stored_centroids = load_arc_centroid_state(user_id)
     arcs, centroid_updates = build_current_arcs(
         payloads,
         classifier_mode=classifier_mode,
@@ -475,6 +528,21 @@ def get_adaptive_arcs(
     )
     if centroid_updates:
         upsert_arc_centroids(user_id, centroid_updates)
+        mirror_arc_centroids(
+            [
+                {
+                    "user_id": user_id,
+                    "arc_name": arc_name,
+                    "centroid_json": payload.get("centroid", []),
+                    "sample_count": float(payload.get("sample_count", 0.0)),
+                    "dominant_topic": payload.get("dominant_topic"),
+                    "vibe": payload.get("vibe"),
+                    "strength": float(payload.get("strength", 0.0)),
+                    "updated_at": utc_now_iso(),
+                }
+                for arc_name, payload in centroid_updates.items()
+            ]
+        )
     return arcs
 
 
@@ -775,6 +843,21 @@ def feedback(
             "created_at": utc_now_iso(),
         }
     )
+    preference_profile = get_user_preference_profile(payload.user_id)
+    if preference_profile:
+        mirror_user_preferences(
+            [
+                {
+                    "user_id": payload.user_id,
+                    "target_type": target_type,
+                    "target_key": target_key,
+                    "score": score,
+                    "updated_at": utc_now_iso(),
+                }
+                for target_type, bucket in preference_profile.items()
+                for target_key, score in bucket.items()
+            ]
+        )
     return {"status": "accepted"}
 
 

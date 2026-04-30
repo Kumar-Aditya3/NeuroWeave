@@ -103,6 +103,64 @@ def mirror_feedback(payload: dict[str, Any]) -> bool:
     return _request("POST", "feedback_events", payload)
 
 
+def mirror_wallpaper_memory(payload: dict[str, Any]) -> bool:
+    return _request("POST", "wallpaper_memory", payload)
+
+
+def mirror_arc_centroids(payloads: list[dict[str, Any]]) -> bool:
+    if not payloads:
+        return True
+    base_url, service_key, enabled = _config()
+    if not enabled or not base_url or not service_key:
+        return False
+
+    target = base_url.rstrip("/") + "/rest/v1/arc_centroids?" + urllib.parse.urlencode({"on_conflict": "user_id,arc_name"})
+    data = json.dumps(payloads).encode("utf-8")
+    request = urllib.request.Request(
+        target,
+        data=data,
+        headers={
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+            "Content-Type": "application/json",
+            "Prefer": "resolution=merge-duplicates,return=minimal",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=6):
+            return True
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError):
+        return False
+
+
+def mirror_user_preferences(payloads: list[dict[str, Any]]) -> bool:
+    if not payloads:
+        return True
+    base_url, service_key, enabled = _config()
+    if not enabled or not base_url or not service_key:
+        return False
+
+    target = base_url.rstrip("/") + "/rest/v1/user_preferences?" + urllib.parse.urlencode({"on_conflict": "user_id,target_type,target_key"})
+    data = json.dumps(payloads).encode("utf-8")
+    request = urllib.request.Request(
+        target,
+        data=data,
+        headers={
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+            "Content-Type": "application/json",
+            "Prefer": "resolution=merge-duplicates,return=minimal",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=6):
+            return True
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError):
+        return False
+
+
 def fetch_recent_events(user_id: str, limit: int = 24) -> list[dict[str, Any]]:
     safe_limit = max(1, min(limit, 100))
     rows = _read(
@@ -167,3 +225,66 @@ def fetch_recent_event_payloads(user_id: str, limit: int = 48) -> list[dict[str,
             }
         )
     return payloads
+
+
+def fetch_wallpaper_memory(user_id: str, limit: int = 36) -> list[dict[str, Any]]:
+    safe_limit = max(1, min(limit, 200))
+    rows = _read(
+        "wallpaper_memory",
+        {
+            "select": "topic,vibe,style,provider,wallpaper_query,wallpaper_preview_url,created_at",
+            "user_id": f"eq.{user_id}",
+            "order": "created_at.desc",
+            "limit": safe_limit,
+        },
+    )
+    return [
+        {
+            "topic": str(row.get("topic") or "unknown"),
+            "vibe": str(row.get("vibe") or "balanced"),
+            "style": str(row.get("style") or "minimal"),
+            "provider": str(row.get("provider") or "generated_future"),
+            "wallpaper_query": str(row.get("wallpaper_query") or ""),
+            "wallpaper_preview_url": row.get("wallpaper_preview_url"),
+            "created_at": _normalize_iso(row.get("created_at")),
+        }
+        for row in rows
+    ]
+
+
+def fetch_arc_centroids(user_id: str) -> dict[str, dict[str, Any]]:
+    rows = _read(
+        "arc_centroids",
+        {
+            "select": "arc_name,centroid_json,sample_count,dominant_topic,vibe,strength",
+            "user_id": f"eq.{user_id}",
+        },
+    )
+    payload: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        centroid = row.get("centroid_json")
+        if not isinstance(centroid, list) or not centroid:
+            continue
+        payload[str(row.get("arc_name") or "arc")] = {
+            "centroid": [float(value) for value in centroid],
+            "sample_count": float(row.get("sample_count") or 0.0),
+            "dominant_topic": row.get("dominant_topic"),
+            "vibe": row.get("vibe"),
+            "strength": float(row.get("strength") or 0.0),
+        }
+    return payload
+
+
+def fetch_user_preferences(user_id: str) -> dict[str, dict[str, float]]:
+    rows = _read(
+        "user_preferences",
+        {
+            "select": "target_type,target_key,score",
+            "user_id": f"eq.{user_id}",
+        },
+    )
+    payload: dict[str, dict[str, float]] = {}
+    for row in rows:
+        bucket = payload.setdefault(str(row.get("target_type") or "general"), {})
+        bucket[str(row.get("target_key") or "")] = round(float(row.get("score") or 0.0), 4)
+    return payload
