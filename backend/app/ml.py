@@ -11,6 +11,118 @@ from .anchors import TOPIC_ANCHORS, VIBE_ANCHORS
 POSITIVE_WORDS = {"calm", "happy", "growth", "focus", "hope", "progress", "joy", "steady", "learn"}
 NEGATIVE_WORDS = {"angry", "sad", "dark", "stress", "anxiety", "doom", "rage", "drained", "overwhelmed"}
 EMBED_DIM = 192
+SEMANTIC_TOPIC_HINTS = {
+    "tech": {
+        "code.exe",
+        "vscode",
+        "visual studio code",
+        "powershell",
+        "terminal",
+        "github",
+        "stack overflow",
+        "openclaw",
+        "fastapi",
+        "python",
+        "npm",
+        "debug",
+        "developer",
+        "api",
+    },
+    "education": {
+        "course",
+        "lecture",
+        "assignment",
+        "study",
+        "tutorial",
+        "docs",
+        "documentation",
+        "getting started",
+        "guide",
+        "readme",
+    },
+    "anime": {
+        "anime",
+        "manga",
+        "otaku",
+        "episode",
+        "character arc",
+    },
+    "fitness": {
+        "workout",
+        "gym",
+        "cardio",
+        "strength",
+        "training",
+    },
+    "philosophy": {
+        "philosophy",
+        "meaning",
+        "existential",
+        "stoic",
+        "ethics",
+        "reflection",
+    },
+    "self-help": {
+        "habit",
+        "discipline",
+        "motivation",
+        "routine",
+        "self improvement",
+        "focus reset",
+    },
+    "news": {
+        "news",
+        "headline",
+        "coverage",
+        "results",
+        "schedule",
+        "update",
+        "breaking",
+    },
+}
+SEMANTIC_VIBE_HINTS = {
+    "calm": {
+        "docs",
+        "documentation",
+        "readme",
+        "study",
+        "guide",
+        "file explorer",
+        "welcome",
+        "notes",
+        "ambient",
+    },
+    "balanced": {
+        "browser",
+        "search",
+        "explorer",
+        "dashboard",
+        "general",
+        "settings",
+    },
+    "intense": {
+        "valorant",
+        "elden ring",
+        "steam",
+        "parsec",
+        "task manager",
+        "error",
+        "debug",
+        "not responding",
+        "ranked",
+        "coverage",
+        "tournament",
+    },
+    "dark": {
+        "doomscroll",
+        "anxiety",
+        "crash",
+        "failed",
+        "problem",
+        "overwhelmed",
+        "night",
+    },
+}
 
 
 def _normalize(text: str) -> str:
@@ -97,6 +209,42 @@ def _keyword_count(text: str, keyword: str) -> int:
     return len(re.findall(pattern, text))
 
 
+def _semantic_signal_scores(text: str) -> tuple[Dict[str, float], Dict[str, float]]:
+    lowered = _normalize(text)
+    topic_boosts = {topic: 0.0 for topic in SEMANTIC_TOPIC_HINTS}
+    vibe_boosts = {vibe: 0.0 for vibe in SEMANTIC_VIBE_HINTS}
+
+    for topic, phrases in SEMANTIC_TOPIC_HINTS.items():
+        for phrase in phrases:
+            if phrase in lowered:
+                topic_boosts[topic] += 1.0 if " " in phrase else 0.7
+
+    for vibe, phrases in SEMANTIC_VIBE_HINTS.items():
+        for phrase in phrases:
+            if phrase in lowered:
+                vibe_boosts[vibe] += 1.0 if " " in phrase else 0.7
+
+    return topic_boosts, vibe_boosts
+
+
+def _blend_scores(base: Dict[str, float], boosts: Dict[str, float], semantic_weight: float) -> Dict[str, float]:
+    if not base:
+        return boosts
+    normalized_boosts = dict(boosts)
+    boost_total = sum(normalized_boosts.values())
+    if boost_total > 0:
+        normalized_boosts = {key: value / boost_total for key, value in normalized_boosts.items()}
+    else:
+        normalized_boosts = {key: 0.0 for key in base}
+
+    merged: Dict[str, float] = {}
+    for key, value in base.items():
+        merged[key] = max(0.0, (value * (1.0 - semantic_weight)) + (normalized_boosts.get(key, 0.0) * semantic_weight))
+
+    total = sum(merged.values()) or 1.0
+    return {key: round(value / total, 4) for key, value in merged.items()}
+
+
 def keyword_classify(text: str) -> Dict[str, object]:
     from .main import TOPIC_KEYWORDS  # imported lazily to avoid circular import at module import time
 
@@ -119,6 +267,9 @@ def keyword_classify(text: str) -> Dict[str, object]:
 def embedding_classify(text: str) -> Dict[str, object]:
     topic_scores = _score_anchors(text, TOPIC_ANCHORS)
     vibe_scores = _score_anchors(text, VIBE_ANCHORS)
+    semantic_topics, semantic_vibes = _semantic_signal_scores(text)
+    topic_scores = _blend_scores(topic_scores, semantic_topics, semantic_weight=0.32)
+    vibe_scores = _blend_scores(vibe_scores, semantic_vibes, semantic_weight=0.4)
     analysis = finalize_analysis(text, topic_scores)
     analysis["vibe_scores"] = vibe_scores
     if vibe_scores and max(vibe_scores.values()) > 0:
@@ -131,6 +282,7 @@ def finalize_analysis(text: str, topic_scores: Dict[str, float]) -> Dict[str, ob
     lowered = _normalize(text)
     positive_hits = sum(lowered.count(word) for word in POSITIVE_WORDS)
     negative_hits = sum(lowered.count(word) for word in NEGATIVE_WORDS)
+    _semantic_topics, semantic_vibes = _semantic_signal_scores(text)
 
     if positive_hits > negative_hits:
         sentiment = "positive"
@@ -139,12 +291,18 @@ def finalize_analysis(text: str, topic_scores: Dict[str, float]) -> Dict[str, ob
     else:
         sentiment = "neutral"
 
-    if negative_hits >= 2:
+    if semantic_vibes["intense"] >= 1.4:
+        vibe = "intense"
+    elif semantic_vibes["dark"] >= 1.2 or negative_hits >= 2:
         vibe = "dark"
-    elif positive_hits >= 2:
+    elif semantic_vibes["calm"] >= 1.4 or positive_hits >= 2:
         vibe = "calm"
     elif "intense" in lowered or "binge" in lowered or "ranked" in lowered:
         vibe = "intense"
+    elif semantic_vibes["balanced"] >= 1.0:
+        vibe = "balanced"
+    elif negative_hits >= 2:
+        vibe = "dark"
     else:
         vibe = "balanced"
 
