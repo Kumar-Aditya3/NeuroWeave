@@ -43,6 +43,9 @@ const topicLabels: Record<Topic, string> = {
   news: "News",
   unknown: "Unknown",
 };
+const SESSION_STABILITY_MIN = 0.42;
+const SESSION_SHIFT_MIN = 0.55;
+const SESSION_STREAK_MIN = 2;
 
 function App() {
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -175,8 +178,10 @@ function App() {
       const contextShifted = contextSignature !== autoApplyStateRef.current.contextSignature;
       const newActivityObserved = latestEventId > autoApplyStateRef.current.lastEventId;
       const wallpaperChanged = wallpaperSignature !== autoApplyStateRef.current.wallpaperSignature;
-      const stableEnough = (sessionContext?.stability ?? 0) >= 0.42;
-      const meaningfulShift = (sessionContext?.shift_score ?? 0) >= 0.55 || (sessionContext?.event_streak ?? 0) >= 2;
+      const stableEnough = (sessionContext?.stability ?? 0) >= SESSION_STABILITY_MIN;
+      const meaningfulShift =
+        (sessionContext?.shift_score ?? 0) >= SESSION_SHIFT_MIN ||
+        (sessionContext?.event_streak ?? 0) >= SESSION_STREAK_MIN;
 
       if (!firstAutoApply && (!contextShifted || !newActivityObserved || !wallpaperChanged || !stableEnough || !meaningfulShift)) return;
       if (!firstAutoApply && Date.now() - autoApplyStateRef.current.appliedAt < cooldownMs) return;

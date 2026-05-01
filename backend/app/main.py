@@ -82,6 +82,15 @@ TOPIC_KEYWORDS = {
 DEDUPE_BUCKET_SECONDS = 300
 WALLPAPER_CACHE_ROOT = Path(__file__).resolve().parents[1] / "wallpaper_cache"
 DEFAULT_TOPIC_WEIGHT = 50.0
+RECENCY_BASE_WEIGHT = 1.0
+RECENCY_DECAY_STEP = 0.03
+RECENCY_MIN_WEIGHT = 0.18
+SESSION_SHIFT_THRESHOLD = 0.55
+SESSION_WINDOW_SIZE = 12
+SESSION_STABILITY_STREAK_WEIGHT = 0.45
+SESSION_STABILITY_DOMINANCE_WEIGHT = 0.35
+SESSION_STABILITY_TIME_WEIGHT = 0.2
+SESSION_REFERENCE_MINUTES = 45.0
 
 
 def recommendation_map(primary_topic: str, vibe: str) -> Dict[str, object]:
@@ -124,6 +133,20 @@ def normalize_recommendation_intensity(value: str) -> str:
         "high": "high",
     }
     return aliases.get(raw, "balanced")
+
+
+def build_preference_sync_payload(user_id: str, preference_profile: dict[str, dict[str, float]]) -> list[dict]:
+    return [
+        {
+            "user_id": user_id,
+            "target_type": target_type,
+            "target_key": target_key,
+            "score": score,
+            "updated_at": utc_now_iso(),
+        }
+        for target_type, bucket in preference_profile.items()
+        for target_key, score in bucket.items()
+    ]
 
 
 def apply_feedback_intensity_bias(intensity: str, preference_profile: dict[str, dict[str, float]]) -> str:
@@ -250,7 +273,7 @@ def build_context_recommendation(
         vibe_weighted: Dict[str, float] = {"calm": 0.0, "balanced": 0.0, "intense": 0.0, "dark": 0.0}
         reason_parts: list[str] = []
         for index, payload in enumerate(recent_payloads):
-            weight = max(0.18, 1.0 - (index * 0.03))
+            weight = max(RECENCY_MIN_WEIGHT, RECENCY_BASE_WEIGHT - (index * RECENCY_DECAY_STEP))
             text_blob = " ".join(
                 [
                     payload["title"],
@@ -321,19 +344,7 @@ def build_context_recommendation(
         }
     )
     if preference_profile:
-        mirror_user_preferences(
-            [
-                {
-                    "user_id": user_id,
-                    "target_type": target_type,
-                    "target_key": target_key,
-                    "score": score,
-                    "updated_at": utc_now_iso(),
-                }
-                for target_type, bucket in preference_profile.items()
-                for target_key, score in bucket.items()
-            ]
-        )
+        mirror_user_preferences(build_preference_sync_payload(user_id, preference_profile))
     if top_arc_name:
         explanation = f"{explanation} Active arc: {top_arc_name}."
     explanation = (
@@ -416,7 +427,7 @@ def build_session_context(recent_payloads: list[dict], current_arcs: list[dict] 
             "dominant_process": "unknown",
         }
 
-    window = recent_payloads[:12]
+    window = recent_payloads[:SESSION_WINDOW_SIZE]
     category_counts: Dict[str, float] = {}
     process_counts: Dict[str, float] = {}
     first_signature = None
@@ -453,9 +464,9 @@ def build_session_context(recent_payloads: list[dict], current_arcs: list[dict] 
         minutes_covered = max(0.0, (newest - oldest).total_seconds() / 60.0)
     stability = min(
         1.0,
-        (streak / max(1, len(window))) * 0.45
-        + (category_counts[dominant_category] / max(1.0, sum(category_counts.values()))) * 0.35
-        + min(1.0, minutes_covered / 45.0) * 0.2,
+        (streak / max(1, len(window))) * SESSION_STABILITY_STREAK_WEIGHT
+        + (category_counts[dominant_category] / max(1.0, sum(category_counts.values()))) * SESSION_STABILITY_DOMINANCE_WEIGHT
+        + min(1.0, minutes_covered / SESSION_REFERENCE_MINUTES) * SESSION_STABILITY_TIME_WEIGHT,
     )
     top_arc = current_arcs[0]["name"] if current_arcs else "general_flow"
     signature = "|".join(
@@ -464,7 +475,7 @@ def build_session_context(recent_payloads: list[dict], current_arcs: list[dict] 
             str(dominant_category),
             str(dominant_process),
             str(streak),
-            "shift" if shift_score >= 0.55 else "steady",
+            "shift" if shift_score >= SESSION_SHIFT_THRESHOLD else "steady",
         ]
     )
     return {
@@ -845,19 +856,7 @@ def feedback(
     )
     preference_profile = get_user_preference_profile(payload.user_id)
     if preference_profile:
-        mirror_user_preferences(
-            [
-                {
-                    "user_id": payload.user_id,
-                    "target_type": target_type,
-                    "target_key": target_key,
-                    "score": score,
-                    "updated_at": utc_now_iso(),
-                }
-                for target_type, bucket in preference_profile.items()
-                for target_key, score in bucket.items()
-            ]
-        )
+        mirror_user_preferences(build_preference_sync_payload(payload.user_id, preference_profile))
     return {"status": "accepted"}
 
 
