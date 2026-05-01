@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+import json
 import math
 from typing import Iterable
 
@@ -14,6 +15,22 @@ ARC_PROTOTYPES = {
     "doomscroll": "heavy news social feeds constant updates political drama anxiety and repetitive scrolling",
     "creative reset": "reflective philosophy self-help journaling visual inspiration ambient focus and calm recovery",
 }
+
+
+def _resolve_payload_analysis(payload: dict, classifier_mode: str, text_blob: str) -> dict:
+    cached_mode = str(payload.get("classifier_mode") or "")
+    cached_scores = payload.get("topic_scores_json")
+    cached_vibe = str(payload.get("vibe") or "")
+    if cached_mode == classifier_mode and cached_vibe and isinstance(cached_scores, dict):
+        return {"topic_scores": cached_scores, "vibe": cached_vibe}
+    if cached_mode == classifier_mode and cached_vibe and isinstance(cached_scores, str):
+        try:
+            decoded_scores = json.loads(cached_scores)
+            if isinstance(decoded_scores, dict):
+                return {"topic_scores": decoded_scores, "vibe": cached_vibe}
+        except json.JSONDecodeError:
+            pass
+    return classify_text(text_blob, classifier_mode=classifier_mode)
 
 
 def _normalize(vector: list[float]) -> list[float]:
@@ -70,7 +87,7 @@ def build_current_arcs(
             centroid_state,
             key=lambda key: cosine_similarity(encoded, centroid_state[key]["centroid"]),
         )
-        analysis = classify_text(text_blob, classifier_mode=classifier_mode)
+        analysis = _resolve_payload_analysis(payload, classifier_mode, text_blob)
         duration_bonus = min(0.75, float(payload.get("duration_seconds", 0) or 0) / 900.0)
         recency_weight = max(0.2, 1.0 - (index * 0.035)) + duration_bonus
         sample_count = float(centroid_state[arc_name]["sample_count"])

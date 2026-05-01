@@ -199,7 +199,7 @@ def fetch_recent_event_payloads(user_id: str, limit: int = 48) -> list[dict[str,
     rows = _read(
         "events_raw",
         {
-            "select": "id,title,url,category,duration_seconds,selected_text,content_text,source,event_type,process_name,topic_scores_json,vibe,created_at",
+            "select": "id,title,url,category,duration_seconds,selected_text,content_text,source,event_type,process_name,topic_scores_json,vibe,classifier_mode,created_at",
             "user_id": f"eq.{user_id}",
             "order": "created_at.desc",
             "limit": safe_limit,
@@ -221,6 +221,7 @@ def fetch_recent_event_payloads(user_id: str, limit: int = 48) -> list[dict[str,
                 "process_name": str(row.get("process_name") or ""),
                 "topic_scores_json": row.get("topic_scores_json"),
                 "vibe": str(row.get("vibe") or "balanced"),
+                "classifier_mode": str(row.get("classifier_mode") or ""),
                 "created_at": _normalize_iso(row.get("created_at")),
             }
         )

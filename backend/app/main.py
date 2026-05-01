@@ -199,6 +199,33 @@ def apply_topic_weight_bias(scores: Dict[str, float], topic_weights: dict[str, f
     return {topic: round(value / total, 4) for topic, value in weighted.items()}
 
 
+def resolve_payload_analysis(payload: dict, classifier_mode: str) -> dict:
+    cached_mode = str(payload.get("classifier_mode") or "")
+    cached_scores = payload.get("topic_scores_json")
+    cached_vibe = str(payload.get("vibe") or "")
+    if cached_mode == classifier_mode and cached_vibe and isinstance(cached_scores, dict):
+        return {"topic_scores": cached_scores, "vibe": cached_vibe}
+    if cached_mode == classifier_mode and cached_vibe and isinstance(cached_scores, str):
+        try:
+            decoded_scores = json.loads(cached_scores)
+            if isinstance(decoded_scores, dict):
+                return {"topic_scores": decoded_scores, "vibe": cached_vibe}
+        except json.JSONDecodeError:
+            pass
+
+    text_blob = " ".join(
+        [
+            payload.get("title", ""),
+            payload.get("url", ""),
+            payload.get("selected_text", ""),
+            payload.get("content_text", ""),
+            payload.get("source", ""),
+            payload.get("event_type", ""),
+        ]
+    )
+    return classify_text(text_blob, classifier_mode=classifier_mode)
+
+
 def normalize_created_at(timestamp: datetime | None) -> str:
     if not timestamp:
         return utc_now_iso()
@@ -274,17 +301,7 @@ def build_context_recommendation(
         reason_parts: list[str] = []
         for index, payload in enumerate(recent_payloads):
             weight = max(RECENCY_MIN_WEIGHT, RECENCY_BASE_WEIGHT - (index * RECENCY_DECAY_STEP))
-            text_blob = " ".join(
-                [
-                    payload["title"],
-                    payload["url"],
-                    payload["selected_text"],
-                    payload["content_text"],
-                    payload["source"],
-                    payload["event_type"],
-                ]
-            )
-            analysis = classify_text(text_blob, classifier_mode=classifier_mode)
+            analysis = resolve_payload_analysis(payload, classifier_mode=classifier_mode)
             for topic, score in analysis["topic_scores"].items():
                 recency_weighted[topic] += float(score) * weight
             vibe_weighted[str(analysis["vibe"])] += weight
@@ -589,6 +606,7 @@ def ingest_page(
         title=payload.title,
         category="browser",
         duration_seconds=None,
+        process_name=None,
         selected_text=payload.selected_text,
         content_text=text_blob,
         topic_scores=analysis["topic_scores"],
@@ -669,6 +687,7 @@ def ingest_pdf(
         title=payload.filename,
         category="document",
         duration_seconds=None,
+        process_name=None,
         selected_text=None,
         content_text=payload.text,
         topic_scores=analysis["topic_scores"],
@@ -758,6 +777,7 @@ def ingest_activity(
         title=payload.title,
         category=payload.category,
         duration_seconds=payload.duration_seconds,
+        process_name=payload.process_name,
         selected_text=payload.selected_text,
         content_text=text_blob,
         topic_scores=analysis["topic_scores"],
