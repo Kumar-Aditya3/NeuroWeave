@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 def _bool_env(name: str, default: bool = False) -> bool:
@@ -46,7 +49,8 @@ def _request(method: str, path: str, payload: dict[str, Any], upsert: bool = Fal
     try:
         with urllib.request.urlopen(request, timeout=4):
             return True
-    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError):
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as exc:
+        logger.warning("Supabase %s %s failed: %s", method, path, exc)
         return False
 
 
@@ -74,7 +78,8 @@ def _read(path: str, params: dict[str, Any] | None = None) -> list[dict[str, Any
             payload = json.loads(response.read().decode("utf-8"))
             if isinstance(payload, list):
                 return [row for row in payload if isinstance(row, dict)]
-    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        logger.warning("Supabase GET %s failed: %s", path, exc)
         return []
     return []
 
@@ -107,14 +112,14 @@ def mirror_wallpaper_memory(payload: dict[str, Any]) -> bool:
     return _request("POST", "wallpaper_memory", payload)
 
 
-def mirror_arc_centroids(payloads: list[dict[str, Any]]) -> bool:
+def _upsert_rows(table: str, on_conflict: str, payloads: list[dict[str, Any]]) -> bool:
     if not payloads:
         return True
     base_url, service_key, enabled = _config()
     if not enabled or not base_url or not service_key:
         return False
 
-    target = base_url.rstrip("/") + "/rest/v1/arc_centroids?" + urllib.parse.urlencode({"on_conflict": "user_id,arc_name"})
+    target = base_url.rstrip("/") + f"/rest/v1/{table}?" + urllib.parse.urlencode({"on_conflict": on_conflict})
     data = json.dumps(payloads).encode("utf-8")
     request = urllib.request.Request(
         target,
@@ -130,35 +135,17 @@ def mirror_arc_centroids(payloads: list[dict[str, Any]]) -> bool:
     try:
         with urllib.request.urlopen(request, timeout=6):
             return True
-    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError):
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as exc:
+        logger.warning("Supabase upsert %s failed: %s", table, exc)
         return False
+
+
+def mirror_arc_centroids(payloads: list[dict[str, Any]]) -> bool:
+    return _upsert_rows("arc_centroids", "user_id,arc_name", payloads)
 
 
 def mirror_user_preferences(payloads: list[dict[str, Any]]) -> bool:
-    if not payloads:
-        return True
-    base_url, service_key, enabled = _config()
-    if not enabled or not base_url or not service_key:
-        return False
-
-    target = base_url.rstrip("/") + "/rest/v1/user_preferences?" + urllib.parse.urlencode({"on_conflict": "user_id,target_type,target_key"})
-    data = json.dumps(payloads).encode("utf-8")
-    request = urllib.request.Request(
-        target,
-        data=data,
-        headers={
-            "apikey": service_key,
-            "Authorization": f"Bearer {service_key}",
-            "Content-Type": "application/json",
-            "Prefer": "resolution=merge-duplicates,return=minimal",
-        },
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=6):
-            return True
-    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError):
-        return False
+    return _upsert_rows("user_preferences", "user_id,target_type,target_key", payloads)
 
 
 def fetch_recent_events(user_id: str, limit: int = 24) -> list[dict[str, Any]]:
