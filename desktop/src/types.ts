@@ -21,6 +21,7 @@ export type Settings = {
   apiKey: string;
   userId: string;
   refreshIntervalSeconds: number;
+  enableDiffusionGeneration: boolean;
   autoApplyWallpaper: boolean;
   wallpaperChangeCooldownMinutes: number;
   themeMode: ThemeMode;

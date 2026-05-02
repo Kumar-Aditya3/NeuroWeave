@@ -799,6 +799,16 @@ function SettingsView({ settings, updateSettings }: { settings: Settings; update
           </select>
         </label>
         <label>
+          Diffusion generation
+          <select
+            value={settings.enableDiffusionGeneration ? "enabled" : "disabled"}
+            onChange={(event) => updateSettings({ enableDiffusionGeneration: event.target.value === "enabled" })}
+          >
+            <option value="disabled">Disabled (fast & stable)</option>
+            <option value="enabled">Enabled (slower, higher GPU load)</option>
+          </select>
+        </label>
+        <label>
           Auto-apply wallpaper
           <select
             value={settings.autoApplyWallpaper ? "enabled" : "disabled"}

@@ -19,6 +19,7 @@ type Settings = {
   apiKey: string;
   userId: string;
   refreshIntervalSeconds: number;
+  enableDiffusionGeneration: boolean;
   autoApplyWallpaper: boolean;
   wallpaperChangeCooldownMinutes: number;
   themeMode: ThemeMode;
@@ -40,6 +41,7 @@ const defaults: Settings = {
   apiKey: "dev-local-key",
   userId: "kumar",
   refreshIntervalSeconds: 5,
+  enableDiffusionGeneration: false,
   autoApplyWallpaper: false,
   wallpaperChangeCooldownMinutes: 20,
   themeMode: "dark",
@@ -78,6 +80,9 @@ function readSettings(): Settings {
     }
     if (typeof parsed.apiKey !== "string" || !parsed.apiKey.trim()) {
       parsed.apiKey = defaults.apiKey;
+    }
+    if (typeof parsed.enableDiffusionGeneration !== "boolean") {
+      parsed.enableDiffusionGeneration = defaults.enableDiffusionGeneration;
     }
     if (parsed.wallpaperProvider !== "curated_unsplash" && parsed.wallpaperProvider !== "generated_future") {
       parsed.wallpaperProvider = defaults.wallpaperProvider;

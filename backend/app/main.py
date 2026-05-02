@@ -228,11 +228,12 @@ def resolve_payload_analysis(payload: dict, classifier_mode: str) -> dict:
     return classify_text(text_blob, classifier_mode=classifier_mode)
 
 
-def resolve_wallpaper_provider(requested_provider: str) -> str:
+def resolve_wallpaper_provider(requested_provider: str, enable_diffusion: bool | None = None) -> str:
     normalized = (requested_provider or "").strip().lower() or "curated_unsplash"
     if normalized not in {"curated_unsplash", "generated_future"}:
         return "curated_unsplash"
-    if normalized == "generated_future" and not ENABLE_DIFFUSION:
+    should_enable_diffusion = ENABLE_DIFFUSION if enable_diffusion is None else enable_diffusion
+    if normalized == "generated_future" and not should_enable_diffusion:
         return "curated_unsplash"
     return normalized
 
@@ -296,6 +297,7 @@ def build_context_recommendation(
     recommendation_intensity: str = "balanced",
     wallpaper_style: str = "minimal",
     wallpaper_provider: str = "curated_unsplash",
+    enable_diffusion: bool | None = None,
     topic_weights: dict[str, float] | None = None,
     recent_payloads: list[dict] | None = None,
     current_arcs: list[dict] | None = None,
@@ -340,7 +342,7 @@ def build_context_recommendation(
         primary_topic = max(profile, key=profile.get)
     mapped = recommendation_map(primary_topic, vibe)
     top_arc_name = current_arcs[0]["name"] if current_arcs else None
-    effective_wallpaper_provider = resolve_wallpaper_provider(wallpaper_provider)
+    effective_wallpaper_provider = resolve_wallpaper_provider(wallpaper_provider, enable_diffusion=enable_diffusion)
     wallpaper = build_wallpaper_payload(
         primary_topic,
         vibe,
@@ -852,6 +854,7 @@ def recommend_context(
     recommendation_intensity: str = "balanced",
     wallpaper_style: str = "minimal",
     wallpaper_provider: str = "curated_unsplash",
+    enable_diffusion: bool = False,
     topic_weights_json: str | None = None,
     _: str = Depends(require_api_key),
 ) -> ContextRecommendation:
@@ -862,6 +865,7 @@ def recommend_context(
         recommendation_intensity=recommendation_intensity,
         wallpaper_style=wallpaper_style,
         wallpaper_provider=wallpaper_provider,
+        enable_diffusion=enable_diffusion,
         topic_weights=topic_weights,
     )
 
@@ -919,6 +923,7 @@ def me_dashboard(
     recommendation_intensity: str = "balanced",
     wallpaper_style: str = "minimal",
     wallpaper_provider: str = "curated_unsplash",
+    enable_diffusion: bool = False,
     topic_weights_json: str | None = None,
     _: str = Depends(require_api_key),
 ) -> DashboardResponse:
@@ -938,6 +943,7 @@ def me_dashboard(
             recommendation_intensity=recommendation_intensity,
             wallpaper_style=wallpaper_style,
             wallpaper_provider=wallpaper_provider,
+            enable_diffusion=enable_diffusion,
             topic_weights=topic_weights,
             recent_payloads=recent_payloads,
             current_arcs=current_arcs,
