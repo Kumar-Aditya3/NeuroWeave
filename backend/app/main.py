@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 import json
+import os
 from hashlib import sha256
 from pathlib import Path
 from typing import Dict
@@ -91,6 +92,7 @@ SESSION_STABILITY_STREAK_WEIGHT = 0.45
 SESSION_STABILITY_DOMINANCE_WEIGHT = 0.35
 SESSION_STABILITY_TIME_WEIGHT = 0.2
 SESSION_REFERENCE_MINUTES = 45.0
+ENABLE_DIFFUSION = os.getenv("NEUROWEAVE_ENABLE_DIFFUSION", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def recommendation_map(primary_topic: str, vibe: str) -> Dict[str, object]:
@@ -226,6 +228,15 @@ def resolve_payload_analysis(payload: dict, classifier_mode: str) -> dict:
     return classify_text(text_blob, classifier_mode=classifier_mode)
 
 
+def resolve_wallpaper_provider(requested_provider: str) -> str:
+    normalized = (requested_provider or "").strip().lower() or "curated_unsplash"
+    if normalized not in {"curated_unsplash", "generated_future"}:
+        return "curated_unsplash"
+    if normalized == "generated_future" and not ENABLE_DIFFUSION:
+        return "curated_unsplash"
+    return normalized
+
+
 def normalize_created_at(timestamp: datetime | None) -> str:
     if not timestamp:
         return utc_now_iso()
@@ -284,7 +295,7 @@ def build_context_recommendation(
     classifier_mode: str = "embedding_primary",
     recommendation_intensity: str = "balanced",
     wallpaper_style: str = "minimal",
-    wallpaper_provider: str = "generated_future",
+    wallpaper_provider: str = "curated_unsplash",
     topic_weights: dict[str, float] | None = None,
     recent_payloads: list[dict] | None = None,
     current_arcs: list[dict] | None = None,
@@ -329,12 +340,13 @@ def build_context_recommendation(
         primary_topic = max(profile, key=profile.get)
     mapped = recommendation_map(primary_topic, vibe)
     top_arc_name = current_arcs[0]["name"] if current_arcs else None
+    effective_wallpaper_provider = resolve_wallpaper_provider(wallpaper_provider)
     wallpaper = build_wallpaper_payload(
         primary_topic,
         vibe,
         normalized_intensity,
         wallpaper_style,
-        provider=wallpaper_provider,
+        provider=effective_wallpaper_provider,
         arc_name=top_arc_name,
         recent_memory=load_wallpaper_memory(user_id, limit=36),
         preview_base_url="http://127.0.0.1:8000",
@@ -839,7 +851,7 @@ def recommend_context(
     classifier_mode: str = "embedding_primary",
     recommendation_intensity: str = "balanced",
     wallpaper_style: str = "minimal",
-    wallpaper_provider: str = "generated_future",
+    wallpaper_provider: str = "curated_unsplash",
     topic_weights_json: str | None = None,
     _: str = Depends(require_api_key),
 ) -> ContextRecommendation:
@@ -906,7 +918,7 @@ def me_dashboard(
     classifier_mode: str = "embedding_primary",
     recommendation_intensity: str = "balanced",
     wallpaper_style: str = "minimal",
-    wallpaper_provider: str = "generated_future",
+    wallpaper_provider: str = "curated_unsplash",
     topic_weights_json: str | None = None,
     _: str = Depends(require_api_key),
 ) -> DashboardResponse:

@@ -211,10 +211,16 @@ function App() {
       });
       void maybeAutoApplyWallpaper(data);
     } catch (error) {
+      const message = error instanceof Error ? error.message : "Backend unreachable";
+      const isConnectivityFailure =
+        message.includes("Failed to fetch") ||
+        message.includes("NetworkError") ||
+        message.includes("ERR_CONNECTION_REFUSED") ||
+        message.includes("Backend unreachable");
       setDashboard((current) => ({
         ...current,
-        online: false,
-        error: error instanceof Error ? error.message : "Backend unreachable",
+        online: isConnectivityFailure ? false : true,
+        error: message,
       }));
     }
   }, [maybeAutoApplyWallpaper, settings]);

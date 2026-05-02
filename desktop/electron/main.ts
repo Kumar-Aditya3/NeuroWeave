@@ -47,7 +47,7 @@ const defaults: Settings = {
   recommendationIntensity: "balanced",
   classifierMode: "embedding_primary",
   wallpaperStyle: "minimal",
-  wallpaperProvider: "generated_future",
+  wallpaperProvider: "curated_unsplash",
   topicWeights: {
     tech: 50,
     education: 50,
@@ -72,7 +72,17 @@ function settingsPath() {
 function readSettings(): Settings {
   try {
     const raw = fs.readFileSync(settingsPath(), "utf-8");
-    return { ...defaults, ...JSON.parse(raw) };
+    const parsed = { ...defaults, ...JSON.parse(raw) } as Settings;
+    if (typeof parsed.backendUrl !== "string" || !parsed.backendUrl.trim().startsWith("http")) {
+      parsed.backendUrl = defaults.backendUrl;
+    }
+    if (typeof parsed.apiKey !== "string" || !parsed.apiKey.trim()) {
+      parsed.apiKey = defaults.apiKey;
+    }
+    if (parsed.wallpaperProvider !== "curated_unsplash" && parsed.wallpaperProvider !== "generated_future") {
+      parsed.wallpaperProvider = defaults.wallpaperProvider;
+    }
+    return parsed;
   } catch {
     writeSettings(defaults);
     return defaults;
