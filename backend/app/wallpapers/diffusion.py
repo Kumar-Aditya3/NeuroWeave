@@ -25,6 +25,7 @@ class DiffusionGenerator:
         self._initialized = True
         self.device = self._select_device()
         self.gpu_memory_gb = self._gpu_memory_gb()
+        self.low_vram_mode = self.device == "cuda" and self.gpu_memory_gb is not None and self.gpu_memory_gb <= 4.5
         self.model_id = os.getenv("DIFFUSION_MODEL_ID", self._default_model_id())
         self.pipeline = None
         self.timeout_seconds = int(os.getenv("DIFFUSION_TIMEOUT_SECONDS", "40"))
@@ -49,16 +50,22 @@ class DiffusionGenerator:
         return "stabilityai/stable-diffusion-xl-base-1.0"
 
     def _default_steps(self) -> str:
+        if self.low_vram_mode:
+            return "12"
         if self.model_id == "runwayml/stable-diffusion-v1-5":
             return "18"
         return "30"
 
     def _default_width(self) -> str:
+        if self.low_vram_mode:
+            return "768"
         if self.model_id == "runwayml/stable-diffusion-v1-5":
             return "1024"
         return "1344"
 
     def _default_height(self) -> str:
+        if self.low_vram_mode:
+            return "432"
         if self.model_id == "runwayml/stable-diffusion-v1-5":
             return "576"
         return "768"
@@ -70,6 +77,12 @@ class DiffusionGenerator:
 
     def _pipeline_dtype(self) -> torch.dtype:
         return torch.float16 if self.device == "cuda" else torch.float32
+
+    def _trim_prompt(self, prompt: str, max_words: int = 64) -> str:
+        tokens = prompt.split()
+        if len(tokens) <= max_words:
+            return prompt
+        return " ".join(tokens[:max_words])
 
     def _configure_pipeline(self, pipeline: Any) -> Any:
         self.uses_cpu_offload = False
@@ -113,7 +126,25 @@ class DiffusionGenerator:
             )
             self.pipeline = self._configure_pipeline(self.pipeline)
         except Exception as e:
-            raise RuntimeError(f"Failed to load diffusion model {self.model_id}: {e}")
+            if self.model_id != "runwayml/stable-diffusion-v1-5":
+                # Automatic fallback for unstable/high-memory model loads.
+                self.model_id = "runwayml/stable-diffusion-v1-5"
+                self.width = min(self.width, 768)
+                self.height = min(self.height, 432)
+                self.num_inference_steps = min(self.num_inference_steps, 12)
+                try:
+                    self.pipeline = StableDiffusionPipeline.from_pretrained(
+                        self.model_id,
+                        torch_dtype=self._pipeline_dtype(),
+                        use_safetensors=True,
+                    )
+                    self.pipeline = self._configure_pipeline(self.pipeline)
+                    return
+                except Exception as fallback_error:
+                    raise RuntimeError(
+                        f"Failed to load diffusion model {self.model_id}: {fallback_error}"
+                    ) from fallback_error
+            raise RuntimeError(f"Failed to load diffusion model {self.model_id}: {e}") from e
 
     def generate(
         self,
@@ -132,10 +163,13 @@ class DiffusionGenerator:
         generator = torch.Generator(device=self._generator_device()).manual_seed(seed_int)
         target_width = width or self.width
         target_height = height or self.height
+        if self.low_vram_mode:
+            target_width = min(target_width, 768)
+            target_height = min(target_height, 432)
 
         try:
             generation_kwargs = {
-                "prompt": prompt,
+                "prompt": self._trim_prompt(prompt),
                 "height": target_height,
                 "width": target_width,
                 "num_inference_steps": self.num_inference_steps,
