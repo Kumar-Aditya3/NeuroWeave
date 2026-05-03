@@ -50,22 +50,16 @@ class DiffusionGenerator:
         return "stabilityai/stable-diffusion-xl-base-1.0"
 
     def _default_steps(self) -> str:
-        if self.low_vram_mode:
-            return "12"
         if self.model_id == "runwayml/stable-diffusion-v1-5":
             return "18"
         return "30"
 
     def _default_width(self) -> str:
-        if self.low_vram_mode:
-            return "768"
         if self.model_id == "runwayml/stable-diffusion-v1-5":
             return "1024"
         return "1344"
 
     def _default_height(self) -> str:
-        if self.low_vram_mode:
-            return "432"
         if self.model_id == "runwayml/stable-diffusion-v1-5":
             return "576"
         return "768"
@@ -163,9 +157,6 @@ class DiffusionGenerator:
         generator = torch.Generator(device=self._generator_device()).manual_seed(seed_int)
         target_width = width or self.width
         target_height = height or self.height
-        if self.low_vram_mode:
-            target_width = min(target_width, 768)
-            target_height = min(target_height, 432)
 
         try:
             generation_kwargs = {
@@ -193,6 +184,40 @@ class DiffusionGenerator:
             }
             return image, metadata
         except Exception as e:
+            # Quality-first run failed. On low-VRAM systems, retry once with a safer
+            # profile before bubbling up so we don't crash the request path.
+            if self.low_vram_mode:
+                message = str(e).lower()
+                if ("out of memory" in message or "cuda" in message or "device" in message) and (
+                    target_width > 768 or target_height > 432 or self.num_inference_steps > 12
+                ):
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                    retry_steps = min(self.num_inference_steps, 12)
+                    retry_kwargs = {
+                        "prompt": self._trim_prompt(prompt),
+                        "height": min(target_height, 432),
+                        "width": min(target_width, 768),
+                        "num_inference_steps": retry_steps,
+                        "guidance_scale": self.guidance_scale,
+                        "generator": torch.Generator(device=self._generator_device()).manual_seed(seed_int),
+                    }
+                    if negative_prompt:
+                        retry_kwargs["negative_prompt"] = negative_prompt
+                    retry_image = self.pipeline(**retry_kwargs).images[0]
+                    retry_metadata = {
+                        "model": self.model_id,
+                        "device": self.device,
+                        "generator_device": self._generator_device(),
+                        "gpu_memory_gb": self.gpu_memory_gb,
+                        "steps": retry_steps,
+                        "guidance_scale": self.guidance_scale,
+                        "seed": seed_int,
+                        "width": retry_kwargs["width"],
+                        "height": retry_kwargs["height"],
+                        "retry_profile": "low_vram_fallback",
+                    }
+                    return retry_image, retry_metadata
             raise RuntimeError(f"Diffusion generation failed: {e}")
 
 
