@@ -32,6 +32,7 @@ class DiffusionGenerator:
         self.guidance_scale = float(os.getenv("DIFFUSION_GUIDANCE_SCALE", "7.5"))
         self.height = int(os.getenv("DIFFUSION_HEIGHT", self._default_height()))
         self.width = int(os.getenv("DIFFUSION_WIDTH", self._default_width()))
+        self.uses_cpu_offload = False
 
     def _gpu_memory_gb(self) -> float | None:
         if not torch.cuda.is_available():
@@ -71,17 +72,26 @@ class DiffusionGenerator:
         return torch.float16 if self.device == "cuda" else torch.float32
 
     def _configure_pipeline(self, pipeline: Any) -> Any:
+        self.uses_cpu_offload = False
         if self.device == "cuda":
             pipeline.enable_attention_slicing()
             if hasattr(pipeline, "enable_vae_slicing"):
                 pipeline.enable_vae_slicing()
             if self.gpu_memory_gb and self.gpu_memory_gb <= 4.5 and hasattr(pipeline, "enable_model_cpu_offload"):
                 pipeline.enable_model_cpu_offload()
+                self.uses_cpu_offload = True
             else:
                 pipeline = pipeline.to(self.device)
         else:
             pipeline = pipeline.to(self.device)
         return pipeline
+
+    def _generator_device(self) -> str:
+        # CPU offload pipelines coordinate execution across devices; the RNG generator
+        # must stay on CPU to avoid cpu/cuda index_select mismatch in schedulers.
+        if self.uses_cpu_offload:
+            return "cpu"
+        return self.device
 
     def _select_device(self) -> str:
         if torch.cuda.is_available():
@@ -119,7 +129,7 @@ class DiffusionGenerator:
 
         # Ensure seed is valid for torch
         seed_int = int(seed) % (2**32)
-        generator = torch.Generator(device=self.device).manual_seed(seed_int)
+        generator = torch.Generator(device=self._generator_device()).manual_seed(seed_int)
         target_width = width or self.width
         target_height = height or self.height
 
@@ -139,6 +149,7 @@ class DiffusionGenerator:
             metadata = {
                 "model": self.model_id,
                 "device": self.device,
+                "generator_device": self._generator_device(),
                 "gpu_memory_gb": self.gpu_memory_gb,
                 "steps": self.num_inference_steps,
                 "guidance_scale": self.guidance_scale,
