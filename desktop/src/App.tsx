@@ -796,6 +796,7 @@ function SettingsView({ settings, updateSettings }: { settings: Settings; update
             <option value={5}>5 seconds</option>
             <option value={10}>10 seconds</option>
             <option value={30}>30 seconds</option>
+            <option value={3600}>1 hour</option>
           </select>
         </label>
         <label>
