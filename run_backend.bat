@@ -42,6 +42,25 @@ echo.
 echo ============================================================
 echo.
 
+REM Handle existing listeners on backend port
+powershell -NoProfile -Command ^
+  "$listeners = Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue; " ^
+  "if (-not $listeners) { exit 0 }; " ^
+  "try { Invoke-RestMethod -Uri 'http://127.0.0.1:8000/health' -TimeoutSec 2 | Out-Null; exit 10 } catch { " ^
+  "$pids = $listeners | Select-Object -ExpandProperty OwningProcess -Unique; " ^
+  "foreach ($procId in $pids) { Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue }; " ^
+  "Start-Sleep -Milliseconds 600; exit 20 }"
+
+if %ERRORLEVEL% EQU 10 (
+  echo [OK] Existing backend is already running and healthy on http://127.0.0.1:8000
+  endlocal
+  exit /b 0
+)
+
+if %ERRORLEVEL% EQU 20 (
+  echo Cleared stale process on port 8000. Starting a fresh backend instance...
+)
+
 REM Start the server
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 
