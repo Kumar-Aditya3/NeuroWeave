@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import threading
 from typing import Any
 
 import torch
@@ -12,6 +13,7 @@ class DiffusionGenerator:
 
     _instance = None
     _pipeline = None
+    _generation_lock = threading.Lock()
 
     def __new__(cls):
         if cls._instance is None:
@@ -149,76 +151,77 @@ class DiffusionGenerator:
         height: int | None = None,
     ) -> tuple[object, dict]:
         """Generate image via diffusion and return PIL image + metadata."""
-        if self.pipeline is None:
-            self.warm_up()
+        with self._generation_lock:
+            if self.pipeline is None:
+                self.warm_up()
 
-        # Ensure seed is valid for torch
-        seed_int = int(seed) % (2**32)
-        generator = torch.Generator(device=self._generator_device()).manual_seed(seed_int)
-        target_width = width or self.width
-        target_height = height or self.height
+            # Ensure seed is valid for torch
+            seed_int = int(seed) % (2**32)
+            generator = torch.Generator(device=self._generator_device()).manual_seed(seed_int)
+            target_width = width or self.width
+            target_height = height or self.height
 
-        try:
-            generation_kwargs = {
-                "prompt": self._trim_prompt(prompt),
-                "height": target_height,
-                "width": target_width,
-                "num_inference_steps": self.num_inference_steps,
-                "guidance_scale": self.guidance_scale,
-                "generator": generator,
-            }
-            if negative_prompt:
-                generation_kwargs["negative_prompt"] = negative_prompt
-            image = self.pipeline(**generation_kwargs).images[0]
+            try:
+                generation_kwargs = {
+                    "prompt": self._trim_prompt(prompt),
+                    "height": target_height,
+                    "width": target_width,
+                    "num_inference_steps": self.num_inference_steps,
+                    "guidance_scale": self.guidance_scale,
+                    "generator": generator,
+                }
+                if negative_prompt:
+                    generation_kwargs["negative_prompt"] = negative_prompt
+                image = self.pipeline(**generation_kwargs).images[0]
 
-            metadata = {
-                "model": self.model_id,
-                "device": self.device,
-                "generator_device": self._generator_device(),
-                "gpu_memory_gb": self.gpu_memory_gb,
-                "steps": self.num_inference_steps,
-                "guidance_scale": self.guidance_scale,
-                "seed": seed_int,
-                "width": target_width,
-                "height": target_height,
-            }
-            return image, metadata
-        except Exception as e:
-            # Quality-first run failed. On low-VRAM systems, retry once with a safer
-            # profile before bubbling up so we don't crash the request path.
-            if self.low_vram_mode:
-                message = str(e).lower()
-                if ("out of memory" in message or "cuda" in message or "device" in message) and (
-                    target_width > 768 or target_height > 432 or self.num_inference_steps > 12
-                ):
-                    if torch.cuda.is_available():
-                        torch.cuda.empty_cache()
-                    retry_steps = min(self.num_inference_steps, 12)
-                    retry_kwargs = {
-                        "prompt": self._trim_prompt(prompt),
-                        "height": min(target_height, 432),
-                        "width": min(target_width, 768),
-                        "num_inference_steps": retry_steps,
-                        "guidance_scale": self.guidance_scale,
-                        "generator": torch.Generator(device=self._generator_device()).manual_seed(seed_int),
-                    }
-                    if negative_prompt:
-                        retry_kwargs["negative_prompt"] = negative_prompt
-                    retry_image = self.pipeline(**retry_kwargs).images[0]
-                    retry_metadata = {
-                        "model": self.model_id,
-                        "device": self.device,
-                        "generator_device": self._generator_device(),
-                        "gpu_memory_gb": self.gpu_memory_gb,
-                        "steps": retry_steps,
-                        "guidance_scale": self.guidance_scale,
-                        "seed": seed_int,
-                        "width": retry_kwargs["width"],
-                        "height": retry_kwargs["height"],
-                        "retry_profile": "low_vram_fallback",
-                    }
-                    return retry_image, retry_metadata
-            raise RuntimeError(f"Diffusion generation failed: {e}")
+                metadata = {
+                    "model": self.model_id,
+                    "device": self.device,
+                    "generator_device": self._generator_device(),
+                    "gpu_memory_gb": self.gpu_memory_gb,
+                    "steps": self.num_inference_steps,
+                    "guidance_scale": self.guidance_scale,
+                    "seed": seed_int,
+                    "width": target_width,
+                    "height": target_height,
+                }
+                return image, metadata
+            except Exception as e:
+                # Quality-first run failed. On low-VRAM systems, retry once with a safer
+                # profile before bubbling up so we don't crash the request path.
+                if self.low_vram_mode:
+                    message = str(e).lower()
+                    if ("out of memory" in message or "cuda" in message or "device" in message) and (
+                        target_width > 768 or target_height > 432 or self.num_inference_steps > 12
+                    ):
+                        if torch.cuda.is_available():
+                            torch.cuda.empty_cache()
+                        retry_steps = min(self.num_inference_steps, 12)
+                        retry_kwargs = {
+                            "prompt": self._trim_prompt(prompt),
+                            "height": min(target_height, 432),
+                            "width": min(target_width, 768),
+                            "num_inference_steps": retry_steps,
+                            "guidance_scale": self.guidance_scale,
+                            "generator": torch.Generator(device=self._generator_device()).manual_seed(seed_int),
+                        }
+                        if negative_prompt:
+                            retry_kwargs["negative_prompt"] = negative_prompt
+                        retry_image = self.pipeline(**retry_kwargs).images[0]
+                        retry_metadata = {
+                            "model": self.model_id,
+                            "device": self.device,
+                            "generator_device": self._generator_device(),
+                            "gpu_memory_gb": self.gpu_memory_gb,
+                            "steps": retry_steps,
+                            "guidance_scale": self.guidance_scale,
+                            "seed": seed_int,
+                            "width": retry_kwargs["width"],
+                            "height": retry_kwargs["height"],
+                            "retry_profile": "low_vram_fallback",
+                        }
+                        return retry_image, retry_metadata
+                raise RuntimeError(f"Diffusion generation failed: {e}")
 
 
 def get_generator() -> DiffusionGenerator:
