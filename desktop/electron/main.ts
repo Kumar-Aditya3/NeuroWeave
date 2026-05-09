@@ -123,6 +123,23 @@ function createWindow() {
   }
 }
 
+function resolveBackendLauncherPath(): string | null {
+  const custom = process.env.NEUROWEAVE_BACKEND_LAUNCHER;
+  const candidates = [
+    custom,
+    path.resolve(process.cwd(), "run_backend.bat"),
+    path.resolve(path.dirname(process.execPath), "..", "..", "..", "run_backend.bat"),
+    path.resolve(path.dirname(process.execPath), "..", "..", "run_backend.bat"),
+  ].filter((value): value is string => Boolean(value));
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
 function downloadFile(url: string, destination: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
@@ -245,6 +262,31 @@ ipcMain.handle("settings:set", (_event, nextSettings: Partial<Settings>) => {
   const settings = { ...readSettings(), ...nextSettings };
   writeSettings(settings);
   return settings;
+});
+
+ipcMain.handle("backend:start", async () => {
+  if (process.platform !== "win32") {
+    return { ok: false, message: "Backend launcher is currently supported on Windows only." };
+  }
+  const launcherPath = resolveBackendLauncherPath();
+  if (!launcherPath) {
+    return { ok: false, message: "Could not find run_backend.bat near this app." };
+  }
+
+  return new Promise<{ ok: boolean; message: string; path?: string }>((resolve) => {
+    execFile(
+      "cmd.exe",
+      ["/c", "start", "", launcherPath],
+      { windowsHide: true },
+      (error) => {
+        if (error) {
+          resolve({ ok: false, message: `Failed to start backend: ${error.message}` });
+          return;
+        }
+        resolve({ ok: true, message: "Backend launch started.", path: launcherPath });
+      }
+    );
+  });
 });
 
 app.whenReady().then(() => {

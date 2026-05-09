@@ -8,4 +8,5 @@ contextBridge.exposeInMainWorld("neuroWeaveSettings", {
 contextBridge.exposeInMainWorld("neuroWeaveDesktop", {
   setWallpaper: (payload: { previewUrl?: string; cachedPath?: string | null }) =>
     ipcRenderer.invoke("wallpaper:set", payload),
+  startBackend: () => ipcRenderer.invoke("backend:start"),
 });

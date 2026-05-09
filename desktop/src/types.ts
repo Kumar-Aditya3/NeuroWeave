@@ -176,6 +176,12 @@ export type WallpaperSetResponse = {
   primaryError?: string;
 };
 
+export type BackendStartResponse = {
+  ok: boolean;
+  message: string;
+  path?: string;
+};
+
 declare global {
   interface Window {
     neuroWeaveSettings: {
@@ -184,6 +190,7 @@ declare global {
     };
     neuroWeaveDesktop: {
       setWallpaper: (payload: { previewUrl?: string; cachedPath?: string | null }) => Promise<WallpaperSetResponse>;
+      startBackend: () => Promise<BackendStartResponse>;
     };
   }
 }

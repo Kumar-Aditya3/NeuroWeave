@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { loadDashboard, sendFeedback } from "./api/client";
-import type { CurrentArc, DashboardData, RecentEvent, Settings, SourceMix, Topic, WallpaperSetResponse } from "./types";
+import type { BackendStartResponse, CurrentArc, DashboardData, RecentEvent, Settings, SourceMix, Topic, WallpaperSetResponse } from "./types";
 
 const navItems = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
@@ -767,6 +767,25 @@ function SourceMixPanel({ mix }: { mix: SourceMix }) {
 }
 
 function SettingsView({ settings, updateSettings }: { settings: Settings; updateSettings: (next: Partial<Settings>) => void }) {
+  const [backendLaunchState, setBackendLaunchState] = useState("");
+
+  async function handleStartBackend() {
+    const desktopBridge = (
+      window as unknown as {
+        neuroWeaveDesktop?: {
+          startBackend: () => Promise<BackendStartResponse>;
+        };
+      }
+    ).neuroWeaveDesktop;
+    if (!desktopBridge?.startBackend) {
+      return;
+    }
+    const response = await desktopBridge.startBackend();
+    const message = response.path ? `${response.message} (${response.path})` : response.message;
+    setBackendLaunchState(message);
+    window.setTimeout(() => setBackendLaunchState(""), 3500);
+  }
+
   return (
     <section className="panel largePanel">
       <div className="panelHeader">
@@ -777,6 +796,13 @@ function SettingsView({ settings, updateSettings }: { settings: Settings; update
         <label>
           Backend URL
           <input value={settings.backendUrl} onChange={(event) => updateSettings({ backendUrl: event.target.value })} />
+        </label>
+        <label>
+          Backend launcher
+          <button onClick={handleStartBackend} type="button">
+            Start backend
+          </button>
+          {backendLaunchState && <span className="eyebrow">{backendLaunchState}</span>}
         </label>
         <label>
           API key
