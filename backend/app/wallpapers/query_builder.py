@@ -13,7 +13,14 @@ from .styles import (
 )
 
 
-def build_wallpaper_query(topic: str, vibe: str, intensity: str, style: str, arc_name: str | None) -> dict:
+def build_wallpaper_query(
+    topic: str,
+    vibe: str,
+    intensity: str,
+    style: str,
+    arc_name: str | None,
+    transition_context: dict | None = None,
+) -> dict:
     topic_prompt = TOPIC_BASE.get(topic, TOPIC_BASE["unknown"])
     vibe_prompt = VIBE_BASE.get(vibe, VIBE_BASE["balanced"])
     style_prompt = WALLPAPER_STYLE_HINTS.get(style, WALLPAPER_STYLE_HINTS["minimal"])
@@ -22,9 +29,14 @@ def build_wallpaper_query(topic: str, vibe: str, intensity: str, style: str, arc
     topic_grammar = TOPIC_GRAMMAR.get(topic, TOPIC_GRAMMAR["unknown"])
     vibe_grammar = VIBE_GRAMMAR.get(vibe, VIBE_GRAMMAR["balanced"])
     intensity_grammar = INTENSITY_GRAMMAR.get(intensity, INTENSITY_GRAMMAR["balanced"])
+    transition_hint = ""
+    if transition_context and transition_context.get("is_transitioning"):
+        prev_topic = transition_context.get("previous_topic") or "prior state"
+        transition_hint = f"gradual transition from {prev_topic} motifs, smooth continuity, "
     arc_fragment = f"{arc_name}, " if arc_name else ""
     wallpaper_query = (
         f"{arc_fragment}{vibe_prompt}, {topic_prompt}, {style_prompt}, {intensity_hint}, "
+        f"{transition_hint}"
         f"{topic_grammar['geometry']}, {topic_grammar['composition']}, "
         f"{vibe_grammar['color_energy']} color field, {vibe_grammar['contrast']} contrast, {vibe_grammar['motion']} motion, "
         f"{intensity_grammar['detail']} detail, {intensity_grammar['negative_space']} negative space, "

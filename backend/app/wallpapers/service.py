@@ -46,10 +46,11 @@ def build_wallpaper_payload(
     provider: str = "generated_future",
     arc_name: str | None = None,
     recent_memory: list[dict] | None = None,
+    transition_context: dict | None = None,
     preview_base_url: str = "http://127.0.0.1:8000",
 ) -> dict:
     memory = recent_memory or []
-    query_payload = build_wallpaper_query(topic, vibe, intensity, style, arc_name)
+    query_payload = build_wallpaper_query(topic, vibe, intensity, style, arc_name, transition_context=transition_context)
     query = query_payload["wallpaper_query"]
     visual_grammar = query_payload.get("visual_grammar")
 
@@ -97,6 +98,7 @@ def build_wallpaper_payload(
         "topic_base": styles.TOPIC_BASE.get(topic, styles.TOPIC_BASE["unknown"]),
         "style_hint": styles.WALLPAPER_STYLE_HINTS.get(style_key, styles.WALLPAPER_STYLE_HINTS["minimal"]),
         "novelty_hint": novelty_hint,
+        "transition_context": transition_context,
     }
     
     novelty_context = {

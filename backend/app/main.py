@@ -93,6 +93,12 @@ SESSION_STABILITY_DOMINANCE_WEIGHT = 0.35
 SESSION_STABILITY_TIME_WEIGHT = 0.2
 SESSION_REFERENCE_MINUTES = 45.0
 ENABLE_DIFFUSION = os.getenv("NEUROWEAVE_ENABLE_DIFFUSION", "").strip().lower() in {"1", "true", "yes", "on"}
+DOMINANCE_SCORE_THRESHOLD = 0.45
+DOMINANCE_MARGIN_THRESHOLD = 0.12
+DOMINANCE_PRIMARY_WEIGHT = 0.7
+DOMINANCE_SECONDARY_WEIGHT = 0.2
+DOMINANCE_REST_WEIGHT = 0.1
+TRANSITION_BLEND_WEIGHT = 0.22
 
 
 def recommendation_map(primary_topic: str, vibe: str) -> Dict[str, object]:
@@ -201,6 +207,42 @@ def apply_topic_weight_bias(scores: Dict[str, float], topic_weights: dict[str, f
     return {topic: round(value / total, 4) for topic, value in weighted.items()}
 
 
+def apply_dominance_profile(scores: Dict[str, float]) -> Dict[str, float]:
+    if not scores:
+        return scores
+    ranked = sorted(scores.items(), key=lambda item: item[1], reverse=True)
+    if len(ranked) < 2:
+        return scores
+    primary_topic, primary_score = ranked[0]
+    secondary_topic, secondary_score = ranked[1]
+    if primary_score < DOMINANCE_SCORE_THRESHOLD:
+        return scores
+    if (primary_score - secondary_score) < DOMINANCE_MARGIN_THRESHOLD:
+        return scores
+
+    rem_topics = [topic for topic, _ in ranked[2:]]
+    rem_total = sum(scores.get(topic, 0.0) for topic in rem_topics)
+    dominated = {topic: 0.0 for topic in scores.keys()}
+    dominated[primary_topic] = DOMINANCE_PRIMARY_WEIGHT
+    dominated[secondary_topic] = DOMINANCE_SECONDARY_WEIGHT
+    if rem_topics:
+        for topic in rem_topics:
+            base = scores.get(topic, 0.0)
+            portion = (base / rem_total) if rem_total > 0 else (1.0 / len(rem_topics))
+            dominated[topic] = DOMINANCE_REST_WEIGHT * portion
+    total = sum(dominated.values()) or 1.0
+    return {topic: round(value / total, 4) for topic, value in dominated.items()}
+
+
+def apply_transition_smoothing(scores: Dict[str, float], previous_topic: str | None) -> Dict[str, float]:
+    if not scores or not previous_topic or previous_topic not in scores:
+        return scores
+    smoothed = {topic: value * (1.0 - TRANSITION_BLEND_WEIGHT) for topic, value in scores.items()}
+    smoothed[previous_topic] += TRANSITION_BLEND_WEIGHT
+    total = sum(smoothed.values()) or 1.0
+    return {topic: round(value / total, 4) for topic, value in smoothed.items()}
+
+
 def resolve_payload_analysis(payload: dict, classifier_mode: str) -> dict:
     cached_mode = str(payload.get("classifier_mode") or "")
     cached_scores = payload.get("topic_scores_json")
@@ -305,6 +347,9 @@ def build_context_recommendation(
     recent_payloads = recent_payloads if recent_payloads is not None else load_recent_event_window(user_id, limit=48)
     profile = get_weighted_profile(user_id)
     preference_profile = load_preference_profile(user_id)
+    recent_memory = load_wallpaper_memory(user_id, limit=36)
+    previous_topic = str(recent_memory[0]["topic"]) if recent_memory else None
+    previous_vibe = str(recent_memory[0]["vibe"]) if recent_memory else None
     if current_arcs is None:
         current_arcs = get_adaptive_arcs(user_id, classifier_mode=classifier_mode, recent_payloads=recent_payloads)
     session_context = build_session_context(recent_payloads, current_arcs)
@@ -325,6 +370,8 @@ def build_context_recommendation(
         total = sum(recency_weighted.values()) or 1.0
         profile = {topic: round(value / total, 4) for topic, value in recency_weighted.items()}
         profile = apply_topic_weight_bias(profile, topic_weights)
+        profile = apply_dominance_profile(profile)
+        profile = apply_transition_smoothing(profile, previous_topic)
         vibe = max(vibe_weighted, key=vibe_weighted.get)
         explanation = "Recent signals: " + "; ".join(reason_parts) if reason_parts else "Recent signals are still warming up."
     else:
@@ -332,6 +379,8 @@ def build_context_recommendation(
         explanation = "Using historical profile because recent events are sparse."
 
     profile = apply_topic_weight_bias(profile, topic_weights)
+    profile = apply_dominance_profile(profile)
+    profile = apply_transition_smoothing(profile, previous_topic)
     normalized_intensity = apply_feedback_intensity_bias(
         normalize_recommendation_intensity(recommendation_intensity),
         preference_profile,
@@ -343,6 +392,13 @@ def build_context_recommendation(
     mapped = recommendation_map(primary_topic, vibe)
     top_arc_name = current_arcs[0]["name"] if current_arcs else None
     effective_wallpaper_provider = resolve_wallpaper_provider(wallpaper_provider, enable_diffusion=enable_diffusion)
+    transition_context = {
+        "previous_topic": previous_topic,
+        "previous_vibe": previous_vibe,
+        "current_topic": primary_topic,
+        "current_vibe": vibe,
+        "is_transitioning": previous_topic is not None and previous_topic != primary_topic,
+    }
     wallpaper = build_wallpaper_payload(
         primary_topic,
         vibe,
@@ -350,7 +406,8 @@ def build_context_recommendation(
         wallpaper_style,
         provider=effective_wallpaper_provider,
         arc_name=top_arc_name,
-        recent_memory=load_wallpaper_memory(user_id, limit=36),
+        recent_memory=recent_memory,
+        transition_context=transition_context,
         preview_base_url="http://127.0.0.1:8000",
     )
     create_wallpaper_memory(
@@ -378,6 +435,8 @@ def build_context_recommendation(
         mirror_user_preferences(build_preference_sync_payload(user_id, preference_profile))
     if top_arc_name:
         explanation = f"{explanation} Active arc: {top_arc_name}."
+    if transition_context["is_transitioning"]:
+        explanation = f"{explanation} Transitioning from {previous_topic} toward {primary_topic}."
     explanation = (
         f"{explanation} Session: {session_context['kind']} / {session_context['dominant_category']} / "
         f"stability {session_context['stability']:.2f}."
