@@ -33,10 +33,17 @@ def build_wallpaper_query(
     if transition_context and transition_context.get("is_transitioning"):
         prev_topic = transition_context.get("previous_topic") or "prior state"
         transition_hint = f"gradual transition from {prev_topic} motifs, smooth continuity, "
+    fitness_shape_hint = ""
+    if topic == "fitness":
+        fitness_shape_hint = (
+            "readable fitness symbolism through sprint-lane geometry, impact rhythm, "
+            "repeating training cadence, no ambiguous generic abstraction, "
+        )
     arc_fragment = f"{arc_name}, " if arc_name else ""
     wallpaper_query = (
         f"{arc_fragment}{vibe_prompt}, {topic_prompt}, {style_prompt}, {intensity_hint}, "
         f"{transition_hint}"
+        f"{fitness_shape_hint}"
         f"{topic_grammar['geometry']}, {topic_grammar['composition']}, "
         f"{vibe_grammar['color_energy']} color field, {vibe_grammar['contrast']} contrast, {vibe_grammar['motion']} motion, "
         f"{intensity_grammar['detail']} detail, {intensity_grammar['negative_space']} negative space, "

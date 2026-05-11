@@ -101,14 +101,26 @@ def _draw_topic_motif(
         return
 
     if topic == "fitness":
-        for _ in range(18):
-            x = rng.randint(-120, width)
-            y = rng.randint(80, height - 80)
-            draw.line((x, y, x + rng.randint(180, 420), y - rng.randint(20, 110)), fill=_rgba(color, 88), width=rng.randint(5, 12))
-        for _ in range(8):
+        lane_y = int(height * 0.68)
+        for offset in range(-2, 3):
+            y = lane_y + (offset * 30)
+            draw.line((0, y, width, y - int(width * 0.06)), fill=_rgba(muted, 42), width=2)
+        for _ in range(22):
+            x = rng.randint(-180, width - 80)
+            y = rng.randint(120, height - 120)
+            x2 = x + rng.randint(240, 560)
+            y2 = y - rng.randint(40, 170)
+            draw.line((x, y, x2, y2), fill=_rgba(color, rng.randint(78, 124)), width=rng.randint(4, 11))
+        for _ in range(12):
             cx = rng.randint(220, width - 220)
-            cy = rng.randint(160, height - 160)
-            draw.arc((cx - 110, cy - 110, cx + 110, cy + 110), 210, 510, fill=_rgba(muted, 76), width=5)
+            cy = rng.randint(180, height - 160)
+            sweep_start = rng.randint(190, 250)
+            sweep_end = sweep_start + rng.randint(220, 310)
+            draw.arc((cx - 130, cy - 130, cx + 130, cy + 130), sweep_start, sweep_end, fill=_rgba(muted, rng.randint(68, 104)), width=rng.randint(4, 7))
+        for step in range(10):
+            bar_x = int(width * 0.12) + (step * int(width * 0.065))
+            bar_h = int(height * (0.07 + (step % 4) * 0.02))
+            draw.rectangle((bar_x, height - 120 - bar_h, bar_x + 16, height - 120), fill=_rgba(color, 74))
         return
 
     if topic == "philosophy":
@@ -200,6 +212,18 @@ def render_procedural_wallpaper(
             cx = rng.randint(120, width - 120)
             cy = rng.randint(90, height - 90)
             draw.line((cx, cy, cx + rng.randint(-240, 240), cy + rng.randint(-140, 140)), fill=_rgba(accent, 38), width=2)
+        if topic == "fitness":
+            for _ in range(10):
+                cx = rng.randint(160, width - 160)
+                cy = rng.randint(140, height - 140)
+                radius = rng.randint(60, 160)
+                draw.arc(
+                    (cx - radius, cy - radius, cx + radius, cy + radius),
+                    rng.randint(200, 250),
+                    rng.randint(460, 520),
+                    fill=_rgba(accent, 42),
+                    width=3,
+                )
     elif density_mode == "low":
         for _ in range(6):
             cx = rng.randint(180, width - 180)
