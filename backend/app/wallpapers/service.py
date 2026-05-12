@@ -77,6 +77,7 @@ def build_wallpaper_payload(
             style=style_key,
             negative_prompt=query_payload.get("negative_prompt"),
             visual_grammar=visual_grammar,
+            palette=query_payload["wallpaper_palette"],
             seed_offset=seed_offset,
             base_url=preview_base_url,
         )

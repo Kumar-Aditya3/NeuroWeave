@@ -23,6 +23,17 @@ PALETTE_MAP = {
     "dark": ["#c2b8ae", "#202325", "#6e7f88"],
 }
 
+TOPIC_ACCENT_MAP = {
+    "tech": "#35d4c8",
+    "education": "#d6a85a",
+    "anime": "#ff5fc8",
+    "fitness": "#ff5a2f",
+    "philosophy": "#b8b0a2",
+    "self-help": "#f2c56b",
+    "news": "#5f7ea8",
+    "unknown": "#8ea0a8",
+}
+
 TOPIC_GRAMMAR = {
     "tech": {"geometry": "layered circuit lattices and signal paths", "composition": "structured asymmetric grid", "density": "medium"},
     "education": {"geometry": "measured frames, shelves, and ruled lines", "composition": "ordered horizon bands", "density": "medium"},
