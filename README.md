@@ -4,7 +4,6 @@ NeuroWeave is a context-aware personalization stack that ingests opt-in activity
 
 ##  Quick Start (Portable Setup)
 
-Want to get started quickly? Just copy the folder to another PC:
 
 1. **Copy `NeuroWeave` folder** to target PC
 2. **Run `setup_portable.bat`** (one time, 5-15 minutes)
