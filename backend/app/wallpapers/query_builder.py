@@ -47,6 +47,7 @@ def build_wallpaper_query(
     style: str,
     arc_name: str | None,
     transition_context: dict | None = None,
+    preference_profile: dict[str, dict[str, float]] | None = None,
 ) -> dict:
     topic_prompt = TOPIC_BASE.get(topic, TOPIC_BASE["unknown"])
     vibe_prompt = VIBE_BASE.get(vibe, VIBE_BASE["balanced"])
@@ -67,11 +68,24 @@ def build_wallpaper_query(
             "readable fitness symbolism through sprint-lane geometry, impact rhythm, "
             "repeating training cadence, no ambiguous generic abstraction, "
         )
+    preference_profile = preference_profile or {}
+    topic_affinity = float(preference_profile.get("topic", {}).get(topic, 0.0))
+    vibe_affinity = float(preference_profile.get("vibe", {}).get(vibe, 0.0))
+    style_affinity = float(preference_profile.get("style", {}).get(style, 0.0))
+    preference_hint = ""
+    preference_state = "neutral"
+    if max(topic_affinity, vibe_affinity, style_affinity) >= 0.75:
+        preference_state = "reinforced"
+        preference_hint = "personal preference reinforced, make the favored visual language more deliberate, "
+    elif min(topic_affinity, vibe_affinity, style_affinity) <= -0.75:
+        preference_state = "softened"
+        preference_hint = "personal preference softened, reduce disliked intensity and avoid overusing this treatment, "
     arc_fragment = f"{arc_name}, " if arc_name else ""
     wallpaper_query = (
         f"{arc_fragment}{vibe_prompt}, {topic_prompt}, {style_prompt}, {intensity_hint}, "
         f"{transition_hint}"
         f"{fitness_shape_hint}"
+        f"{preference_hint}"
         f"{topic_grammar['geometry']}, {topic_grammar['composition']}, "
         f"palette anchored by {palette[0]} {palette[1]} with {topic_accent} semantic accent, "
         f"{vibe_grammar['color_energy']} color field, {vibe_grammar['contrast']} contrast, {vibe_grammar['motion']} motion, "
@@ -95,6 +109,12 @@ def build_wallpaper_query(
                 "palette": palette,
                 "semantic_accent": topic_accent,
                 "strategy": "vibe base blended with topic accent",
+            },
+            "preference": {
+                "state": preference_state,
+                "topic_affinity": round(topic_affinity, 4),
+                "vibe_affinity": round(vibe_affinity, 4),
+                "style_affinity": round(style_affinity, 4),
             },
         },
     }

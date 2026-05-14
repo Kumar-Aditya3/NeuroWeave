@@ -99,6 +99,9 @@ DOMINANCE_PRIMARY_WEIGHT = 0.7
 DOMINANCE_SECONDARY_WEIGHT = 0.2
 DOMINANCE_REST_WEIGHT = 0.1
 TRANSITION_BLEND_WEIGHT = 0.22
+PREFERENCE_TOPIC_MULTIPLIER_STEP = 0.08
+PREFERENCE_TOPIC_MIN_MULTIPLIER = 0.72
+PREFERENCE_TOPIC_MAX_MULTIPLIER = 1.32
 
 
 def recommendation_map(primary_topic: str, vibe: str) -> Dict[str, object]:
@@ -201,6 +204,24 @@ def apply_topic_weight_bias(scores: Dict[str, float], topic_weights: dict[str, f
     for topic, score in scores.items():
         slider_value = topic_weights.get(topic, DEFAULT_TOPIC_WEIGHT)
         multiplier = 0.5 + (slider_value / 100.0)
+        weighted[topic] = float(score) * multiplier
+
+    total = sum(weighted.values()) or 1.0
+    return {topic: round(value / total, 4) for topic, value in weighted.items()}
+
+
+def apply_preference_topic_bias(scores: Dict[str, float], preference_profile: dict[str, dict[str, float]]) -> Dict[str, float]:
+    if not scores:
+        return scores
+    topic_preferences = preference_profile.get("topic", {})
+    if not topic_preferences:
+        return scores
+
+    weighted: Dict[str, float] = {}
+    for topic, score in scores.items():
+        affinity = float(topic_preferences.get(topic, 0.0))
+        multiplier = 1.0 + (affinity * PREFERENCE_TOPIC_MULTIPLIER_STEP)
+        multiplier = max(PREFERENCE_TOPIC_MIN_MULTIPLIER, min(PREFERENCE_TOPIC_MAX_MULTIPLIER, multiplier))
         weighted[topic] = float(score) * multiplier
 
     total = sum(weighted.values()) or 1.0
@@ -370,6 +391,7 @@ def build_context_recommendation(
         total = sum(recency_weighted.values()) or 1.0
         profile = {topic: round(value / total, 4) for topic, value in recency_weighted.items()}
         profile = apply_topic_weight_bias(profile, topic_weights)
+        profile = apply_preference_topic_bias(profile, preference_profile)
         profile = apply_dominance_profile(profile)
         profile = apply_transition_smoothing(profile, previous_topic)
         vibe = max(vibe_weighted, key=vibe_weighted.get)
@@ -379,6 +401,7 @@ def build_context_recommendation(
         explanation = "Using historical profile because recent events are sparse."
 
     profile = apply_topic_weight_bias(profile, topic_weights)
+    profile = apply_preference_topic_bias(profile, preference_profile)
     profile = apply_dominance_profile(profile)
     profile = apply_transition_smoothing(profile, previous_topic)
     normalized_intensity = apply_feedback_intensity_bias(
@@ -408,6 +431,7 @@ def build_context_recommendation(
         arc_name=top_arc_name,
         recent_memory=recent_memory,
         transition_context=transition_context,
+        preference_profile=preference_profile,
         preview_base_url="http://127.0.0.1:8000",
     )
     create_wallpaper_memory(
@@ -450,6 +474,7 @@ def build_context_recommendation(
         "primary_topic_confidence": profile.get(primary_topic, 0.0),
         "classifier_mode": classifier_mode,
         "topic_weight_bias": {topic: topic_weights.get(topic, DEFAULT_TOPIC_WEIGHT) for topic in TOPIC_KEYWORDS.keys()} if topic_weights else None,
+        "preference_topic_bias": preference_profile.get("topic") if preference_profile else None,
         "normalized_intensity": normalized_intensity,
         "preference_profile": preference_profile or None,
     }
