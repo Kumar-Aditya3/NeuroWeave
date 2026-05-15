@@ -86,12 +86,33 @@ create table if not exists public.user_preferences (
   unique (user_id, target_type, target_key)
 );
 
+create table if not exists public.derived_state (
+  id bigint generated always as identity primary key,
+  user_id text not null unique,
+  primary_topic text not null,
+  vibe text not null,
+  topic_scores_json jsonb not null,
+  session_context_json jsonb,
+  classification_confidence_json jsonb,
+  prompt_components_json jsonb,
+  generation_metadata_json jsonb,
+  novelty_context_json jsonb,
+  visual_grammar_json jsonb,
+  wallpaper_query text not null,
+  wallpaper_palette_json jsonb,
+  wallpaper_preview_url text,
+  wallpaper_source text,
+  wallpaper_provider text,
+  updated_at timestamptz not null default now()
+);
+
 alter table public.events_raw enable row level security;
 alter table public.devices_state enable row level security;
 alter table public.feedback_events enable row level security;
 alter table public.wallpaper_memory enable row level security;
 alter table public.arc_centroids enable row level security;
 alter table public.user_preferences enable row level security;
+alter table public.derived_state enable row level security;
 
 -- Application service role can bypass RLS; these policies allow future authenticated clients.
 drop policy if exists events_raw_user_policy on public.events_raw;
@@ -126,6 +147,12 @@ with check (auth.uid()::text = user_id);
 
 drop policy if exists user_preferences_user_policy on public.user_preferences;
 create policy user_preferences_user_policy on public.user_preferences
+for all
+using (auth.uid()::text = user_id)
+with check (auth.uid()::text = user_id);
+
+drop policy if exists derived_state_user_policy on public.derived_state;
+create policy derived_state_user_policy on public.derived_state
 for all
 using (auth.uid()::text = user_id)
 with check (auth.uid()::text = user_id);

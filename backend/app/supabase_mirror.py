@@ -112,6 +112,10 @@ def mirror_wallpaper_memory(payload: dict[str, Any]) -> bool:
     return _request("POST", "wallpaper_memory", payload)
 
 
+def mirror_derived_state(payload: dict[str, Any]) -> bool:
+    return _request("POST", "derived_state", payload, upsert=True, on_conflict="user_id")
+
+
 def _upsert_rows(table: str, on_conflict: str, payloads: list[dict[str, Any]]) -> bool:
     if not payloads:
         return True

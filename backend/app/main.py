@@ -48,6 +48,7 @@ from .supabase_mirror import (
     fetch_user_preferences as fetch_supabase_user_preferences,
     fetch_wallpaper_memory as fetch_supabase_wallpaper_memory,
     mirror_arc_centroids,
+    mirror_derived_state,
     mirror_device,
     mirror_event,
     mirror_feedback,
@@ -478,6 +479,30 @@ def build_context_recommendation(
         "normalized_intensity": normalized_intensity,
         "preference_profile": preference_profile or None,
     }
+    prompt_components = wallpaper.get("prompt_components")
+    generation_metadata = wallpaper.get("generation_metadata")
+    novelty_context = wallpaper.get("novelty_context")
+    visual_grammar = wallpaper.get("visual_grammar")
+    mirror_derived_state(
+        {
+            "user_id": user_id,
+            "primary_topic": primary_topic,
+            "vibe": vibe,
+            "topic_scores_json": {k: round(v, 4) for k, v in profile.items()},
+            "session_context_json": session_context,
+            "classification_confidence_json": classification_confidence,
+            "prompt_components_json": prompt_components,
+            "generation_metadata_json": generation_metadata,
+            "novelty_context_json": novelty_context,
+            "visual_grammar_json": visual_grammar,
+            "wallpaper_query": wallpaper["wallpaper_query"],
+            "wallpaper_palette_json": wallpaper["wallpaper_palette"],
+            "wallpaper_preview_url": wallpaper["wallpaper_preview_url"],
+            "wallpaper_source": wallpaper["wallpaper_source"],
+            "wallpaper_provider": wallpaper["wallpaper_provider"],
+            "updated_at": utc_now_iso(),
+        }
+    )
     
     return ContextRecommendation(
         user_id=user_id,
@@ -497,9 +522,9 @@ def build_context_recommendation(
         vibe=vibe,  # type: ignore[arg-type]
         classifier_mode=classifier_mode,
         explanation=explanation,
-        prompt_components=wallpaper.get("prompt_components"),
-        generation_metadata=wallpaper.get("generation_metadata"),
-        novelty_context=wallpaper.get("novelty_context"),
+        prompt_components=prompt_components,
+        generation_metadata=generation_metadata,
+        novelty_context=novelty_context,
         classification_confidence=classification_confidence,
         session_context=session_context,
     )
