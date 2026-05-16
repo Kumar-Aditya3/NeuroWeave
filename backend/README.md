@@ -3,7 +3,7 @@
 ## Goal
 
 NeuroWeave builds a context-aware personalization engine that adapts a user's digital environment based on what they are consuming.  
-Current focus is desktop-first and opt-in: ingest user-approved content signals, build a lightweight evolving profile, and generate recommendations for wallpaper mood, music mood, and quote style.
+Current focus is desktop-first and opt-in: ingest user-approved content signals, build a lightweight evolving profile, and generate adaptive wallpaper mood, color, geometry, and composition.
 
 ## Current Methods
 
@@ -40,10 +40,7 @@ Current focus is desktop-first and opt-in: ingest user-approved content signals,
 
 - Context recommendation endpoint: `GET /recommend/context`
 - Dashboard aggregation via `GET /me/dashboard` now carries wallpaper preview/query metadata
-- Rule-based mapping from dominant topic + latest vibe to:
-  - wallpaper tags
-  - music mood
-  - quote style
+- Rule-based mapping from dominant topic + latest vibe to wallpaper tags and visual grammar.
 
 ### Access Control
 

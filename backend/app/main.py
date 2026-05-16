@@ -105,7 +105,7 @@ PREFERENCE_TOPIC_MIN_MULTIPLIER = 0.72
 PREFERENCE_TOPIC_MAX_MULTIPLIER = 1.32
 
 
-def recommendation_map(primary_topic: str, vibe: str) -> Dict[str, object]:
+def recommendation_map(primary_topic: str) -> Dict[str, object]:
     wallpaper_by_topic = {
         "tech": ["minimal", "dark-ui", "futuristic"],
         "education": ["library", "desk-setup", "warm-focus"],
@@ -116,22 +116,8 @@ def recommendation_map(primary_topic: str, vibe: str) -> Dict[str, object]:
         "news": ["editorial", "world-map", "neutral"],
         "unknown": ["neutral", "minimal", "soft-light"],
     }
-    music_by_vibe = {
-        "calm": "lofi / ambient",
-        "balanced": "indie / instrumental",
-        "intense": "synthwave / cinematic",
-        "dark": "dark ambient / downtempo",
-    }
-    quote_by_vibe = {
-        "calm": "mindful and reflective",
-        "balanced": "practical and focused",
-        "intense": "driven and resilient",
-        "dark": "grounding and hopeful",
-    }
     return {
         "wallpaper_tags": wallpaper_by_topic.get(primary_topic, ["minimal"]),
-        "music_mood": music_by_vibe.get(vibe, "indie / instrumental"),
-        "quote_style": quote_by_vibe.get(vibe, "practical and focused"),
     }
 
 
@@ -413,7 +399,7 @@ def build_context_recommendation(
     primary_topic = "unknown"
     if profile and max(profile.values()) > 0:
         primary_topic = max(profile, key=profile.get)
-    mapped = recommendation_map(primary_topic, vibe)
+    mapped = recommendation_map(primary_topic)
     top_arc_name = current_arcs[0]["name"] if current_arcs else None
     effective_wallpaper_provider = resolve_wallpaper_provider(wallpaper_provider, enable_diffusion=enable_diffusion)
     transition_context = {
@@ -517,8 +503,6 @@ def build_context_recommendation(
         wallpaper_rationale=wallpaper["wallpaper_rationale"],
         wallpaper_cached_path=wallpaper["wallpaper_cached_path"],
         wallpaper_alternates=wallpaper["wallpaper_alternates"],
-        music_mood=mapped["music_mood"],  # type: ignore[arg-type]
-        quote_style=mapped["quote_style"],  # type: ignore[arg-type]
         vibe=vibe,  # type: ignore[arg-type]
         classifier_mode=classifier_mode,
         explanation=explanation,

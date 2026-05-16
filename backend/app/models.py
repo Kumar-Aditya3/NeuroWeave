@@ -88,8 +88,6 @@ class ContextRecommendation(BaseModel):
     wallpaper_rationale: str
     wallpaper_cached_path: Optional[str] = None
     wallpaper_alternates: list[dict] = Field(default_factory=list)
-    music_mood: str
-    quote_style: str
     vibe: Vibe
     classifier_mode: str = "embedding_primary"
     explanation: str = ""

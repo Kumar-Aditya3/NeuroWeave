@@ -55,8 +55,6 @@ export type Recommendation = {
     cached_path?: string | null;
     source: string;
   }>;
-  music_mood: string;
-  quote_style: string;
   vibe: Vibe;
   classifier_mode: ClassifierMode;
   explanation: string;
