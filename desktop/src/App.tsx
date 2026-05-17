@@ -365,7 +365,6 @@ function App() {
                     <p>{recommendation?.wallpaper_rationale ?? "Waiting for a semantic arc to form."}</p>
                   </div>
                   
-                  {/* Generation Details & Provenance Section */}
                   {recommendation?.prompt_components || recommendation?.generation_metadata || recommendation?.novelty_context || recommendation?.classification_confidence ? (
                     <div className="detailsSection">
                       <button
@@ -456,11 +455,6 @@ function App() {
                               {recommendation.novelty_context.novelty_hint_applied && (
                                 <p>
                                   <span className="detailLabel">Hint Applied:</span> Yes
-                                </p>
-                              )}
-                              {recommendation.novelty_context.similarity_score !== undefined && (
-                                <p>
-                                  <span className="detailLabel">Similarity:</span> {(recommendation.novelty_context.similarity_score * 100).toFixed(1)}%
                                 </p>
                               )}
                             </div>

@@ -81,7 +81,6 @@ export type Recommendation = {
   novelty_context?: {
     recent_count?: number;
     novelty_hint_applied?: boolean;
-    similarity_score?: number;
   };
   classification_confidence?: {
     topic_scores_all?: Record<Topic, number>;

@@ -104,21 +104,16 @@ PREFERENCE_TOPIC_MULTIPLIER_STEP = 0.08
 PREFERENCE_TOPIC_MIN_MULTIPLIER = 0.72
 PREFERENCE_TOPIC_MAX_MULTIPLIER = 1.32
 
-
-def recommendation_map(primary_topic: str) -> Dict[str, object]:
-    wallpaper_by_topic = {
-        "tech": ["minimal", "dark-ui", "futuristic"],
-        "education": ["library", "desk-setup", "warm-focus"],
-        "anime": ["cinematic", "neon", "character-art"],
-        "fitness": ["dynamic", "high-contrast", "athletic"],
-        "philosophy": ["abstract", "statue", "monochrome"],
-        "self-help": ["clean", "focus", "morning-light"],
-        "news": ["editorial", "world-map", "neutral"],
-        "unknown": ["neutral", "minimal", "soft-light"],
-    }
-    return {
-        "wallpaper_tags": wallpaper_by_topic.get(primary_topic, ["minimal"]),
-    }
+WALLPAPER_TAGS_BY_TOPIC = {
+    "tech": ["minimal", "dark-ui", "futuristic"],
+    "education": ["library", "desk-setup", "warm-focus"],
+    "anime": ["cinematic", "neon", "character-art"],
+    "fitness": ["dynamic", "high-contrast", "athletic"],
+    "philosophy": ["abstract", "statue", "monochrome"],
+    "self-help": ["clean", "focus", "morning-light"],
+    "news": ["editorial", "world-map", "neutral"],
+    "unknown": ["neutral", "minimal", "soft-light"],
+}
 
 
 def normalize_recommendation_intensity(value: str) -> str:
@@ -399,7 +394,6 @@ def build_context_recommendation(
     primary_topic = "unknown"
     if profile and max(profile.values()) > 0:
         primary_topic = max(profile, key=profile.get)
-    mapped = recommendation_map(primary_topic)
     top_arc_name = current_arcs[0]["name"] if current_arcs else None
     effective_wallpaper_provider = resolve_wallpaper_provider(wallpaper_provider, enable_diffusion=enable_diffusion)
     transition_context = {
@@ -494,7 +488,7 @@ def build_context_recommendation(
         user_id=user_id,
         primary_topic=primary_topic,  # type: ignore[arg-type]
         topic_scores={k: round(v, 4) for k, v in profile.items()},
-        wallpaper_tags=mapped["wallpaper_tags"],  # type: ignore[arg-type]
+        wallpaper_tags=WALLPAPER_TAGS_BY_TOPIC.get(primary_topic, ["minimal"]),
         wallpaper_query=wallpaper["wallpaper_query"],
         wallpaper_preview_url=wallpaper["wallpaper_preview_url"],
         wallpaper_palette=wallpaper["wallpaper_palette"],
