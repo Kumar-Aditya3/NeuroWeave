@@ -173,12 +173,21 @@ def _load_sentence_transformer():
         return None
 
 
-def _encode_text(text: str) -> list[float]:
+def _encode_text_uncached(text: str) -> list[float]:
     model = _load_sentence_transformer()
     if model is None:
         return _hash_vectorize(text)
     vector = model.encode(text, normalize_embeddings=True)
     return [float(value) for value in vector]
+
+
+@lru_cache(maxsize=4096)
+def _encode_text_cached(text: str) -> tuple[float, ...]:
+    return tuple(_encode_text_uncached(text))
+
+
+def _encode_text(text: str) -> list[float]:
+    return list(_encode_text_cached(text))
 
 
 def encode_text(text: str) -> list[float]:

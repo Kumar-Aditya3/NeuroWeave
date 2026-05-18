@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from functools import lru_cache
 import json
 import math
 from typing import Iterable
@@ -15,6 +16,11 @@ ARC_PROTOTYPES = {
     "doomscroll": "heavy news social feeds constant updates political drama anxiety and repetitive scrolling",
     "creative reset": "reflective philosophy self-help journaling visual inspiration ambient focus and calm recovery",
 }
+
+
+@lru_cache(maxsize=1)
+def _prototype_vectors() -> dict[str, tuple[float, ...]]:
+    return {name: tuple(_normalize(encode_text(prompt))) for name, prompt in ARC_PROTOTYPES.items()}
 
 
 def _resolve_payload_analysis(payload: dict, classifier_mode: str, text_blob: str) -> dict:
@@ -43,6 +49,21 @@ def _weighted_centroid_update(current: list[float], incoming: list[float], learn
     return _normalize(merged)
 
 
+def _payload_text(payload: dict) -> str:
+    return " ".join(
+        [
+            payload.get("title", ""),
+            payload.get("url", ""),
+            payload.get("selected_text", ""),
+            payload.get("content_text", ""),
+            payload.get("source", ""),
+            payload.get("event_type", ""),
+            payload.get("category", ""),
+            f"{payload.get('duration_seconds', 0)} seconds active",
+        ]
+    ).strip()
+
+
 def build_current_arcs(
     recent_payloads: Iterable[dict],
     classifier_mode: str = "embedding_primary",
@@ -52,34 +73,22 @@ def build_current_arcs(
     if not payloads:
         return [], {}
 
-    prototype_vectors = {name: _normalize(encode_text(prompt)) for name, prompt in ARC_PROTOTYPES.items()}
     buckets: dict[str, list[dict]] = {name: [] for name in ARC_PROTOTYPES}
     centroid_state: dict[str, dict] = {}
-    for arc_name, prototype in prototype_vectors.items():
+    for arc_name, prototype in _prototype_vectors().items():
         stored = (prior_centroids or {}).get(arc_name, {})
         stored_centroid = stored.get("centroid")
         if isinstance(stored_centroid, list) and stored_centroid:
             centroid = _normalize([float(value) for value in stored_centroid])
         else:
-            centroid = prototype
+            centroid = list(prototype)
         centroid_state[arc_name] = {
             "centroid": centroid,
             "sample_count": float(stored.get("sample_count", 0.0)),
         }
 
     for index, payload in enumerate(payloads):
-        text_blob = " ".join(
-            [
-                payload.get("title", ""),
-                payload.get("url", ""),
-                payload.get("selected_text", ""),
-                payload.get("content_text", ""),
-                payload.get("source", ""),
-                payload.get("event_type", ""),
-                payload.get("category", ""),
-                f"{payload.get('duration_seconds', 0)} seconds active",
-            ]
-        ).strip()
+        text_blob = _payload_text(payload)
         if not text_blob:
             continue
         encoded = _normalize(encode_text(text_blob))
