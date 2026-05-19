@@ -40,7 +40,7 @@ Current focus is desktop-first and opt-in: ingest user-approved content signals,
 
 - Context recommendation endpoint: `GET /recommend/context`
 - Dashboard aggregation via `GET /me/dashboard` now carries wallpaper preview/query metadata
-- Rule-based mapping from dominant topic + latest vibe to wallpaper tags and visual grammar.
+- Rule-based mapping from dominant topic + latest vibe to visual grammar, palette, and wallpaper generation metadata.
 
 ### Access Control
 

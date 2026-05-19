@@ -104,18 +104,6 @@ PREFERENCE_TOPIC_MULTIPLIER_STEP = 0.08
 PREFERENCE_TOPIC_MIN_MULTIPLIER = 0.72
 PREFERENCE_TOPIC_MAX_MULTIPLIER = 1.32
 
-WALLPAPER_TAGS_BY_TOPIC = {
-    "tech": ["minimal", "dark-ui", "futuristic"],
-    "education": ["library", "desk-setup", "warm-focus"],
-    "anime": ["cinematic", "neon", "character-art"],
-    "fitness": ["dynamic", "high-contrast", "athletic"],
-    "philosophy": ["abstract", "statue", "monochrome"],
-    "self-help": ["clean", "focus", "morning-light"],
-    "news": ["editorial", "world-map", "neutral"],
-    "unknown": ["neutral", "minimal", "soft-light"],
-}
-
-
 def normalize_recommendation_intensity(value: str) -> str:
     raw = (value or "").strip().lower()
     aliases = {
@@ -490,7 +478,6 @@ def build_context_recommendation(
         user_id=user_id,
         primary_topic=primary_topic,  # type: ignore[arg-type]
         topic_scores={k: round(v, 4) for k, v in profile.items()},
-        wallpaper_tags=WALLPAPER_TAGS_BY_TOPIC.get(primary_topic, ["minimal"]),
         wallpaper_query=wallpaper["wallpaper_query"],
         wallpaper_preview_url=wallpaper["wallpaper_preview_url"],
         wallpaper_palette=wallpaper["wallpaper_palette"],

@@ -42,7 +42,6 @@ export type Recommendation = {
   user_id: string;
   primary_topic: Topic;
   topic_scores: Record<Topic, number>;
-  wallpaper_tags: string[];
   wallpaper_query: string;
   wallpaper_preview_url: string;
   wallpaper_palette: string[];

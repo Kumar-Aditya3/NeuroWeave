@@ -79,7 +79,6 @@ class ContextRecommendation(BaseModel):
     user_id: str
     primary_topic: Topic
     topic_scores: Dict[str, float]
-    wallpaper_tags: list[str]
     wallpaper_query: str
     wallpaper_preview_url: str
     wallpaper_palette: list[str]
