@@ -95,6 +95,7 @@ class ContextRecommendation(BaseModel):
     prompt_components: Optional[dict] = None
     generation_metadata: Optional[dict] = None
     novelty_context: Optional[dict] = None
+    visual_fit: Optional[dict] = None
     classification_confidence: Optional[dict] = None
     session_context: Optional[dict] = None
 

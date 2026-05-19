@@ -365,7 +365,7 @@ function App() {
                     <p>{recommendation?.wallpaper_rationale ?? "Waiting for a semantic arc to form."}</p>
                   </div>
                   
-                  {recommendation?.prompt_components || recommendation?.generation_metadata || recommendation?.novelty_context || recommendation?.classification_confidence ? (
+                  {recommendation?.prompt_components || recommendation?.generation_metadata || recommendation?.novelty_context || recommendation?.visual_fit || recommendation?.classification_confidence ? (
                     <div className="detailsSection">
                       <button
                         className="detailsToggle"
@@ -457,6 +457,22 @@ function App() {
                                   <span className="detailLabel">Hint Applied:</span> Yes
                                 </p>
                               )}
+                            </div>
+                          )}
+                          {recommendation.visual_fit && (
+                            <div className="detailsGroup">
+                              <h4>Visual Fit</h4>
+                              {recommendation.visual_fit.score !== undefined && (
+                                <p>
+                                  <span className="detailLabel">Score:</span> {(recommendation.visual_fit.score * 100).toFixed(1)}% / {recommendation.visual_fit.grade ?? "ungraded"}
+                                </p>
+                              )}
+                              {recommendation.visual_fit.components &&
+                                Object.entries(recommendation.visual_fit.components).map(([key, value]) => (
+                                  <p key={key}>
+                                    <span className="detailLabel">{key.replace(/_/g, " ")}:</span> {(value * 100).toFixed(0)}%
+                                  </p>
+                                ))}
                             </div>
                           )}
                           

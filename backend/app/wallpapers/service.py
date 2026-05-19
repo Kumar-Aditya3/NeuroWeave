@@ -15,6 +15,95 @@ NOVELTY_HINTS = [
 ]
 
 
+def _clamp_score(value: float) -> float:
+    return round(max(0.0, min(1.0, value)), 4)
+
+
+def _query_contains(query: str, phrase: str) -> bool:
+    return phrase.lower() in query.lower()
+
+
+def _build_visual_fit(
+    *,
+    topic: str,
+    vibe: str,
+    intensity: str,
+    style: str,
+    query: str,
+    query_payload: dict,
+    repeated_count: int,
+    novelty_hint: str | None,
+) -> dict:
+    grammar = query_payload.get("visual_grammar") or {}
+    topic_grammar = grammar.get("topic") or {}
+    vibe_grammar = grammar.get("vibe") or {}
+    intensity_grammar = grammar.get("intensity") or {}
+    color_grammar = grammar.get("color") or {}
+    preference_grammar = grammar.get("preference") or {}
+
+    topic_terms = [
+        topic,
+        str(styles.TOPIC_BASE.get(topic, "")),
+        str(topic_grammar.get("geometry", "")),
+        str(topic_grammar.get("composition", "")),
+    ]
+    vibe_terms = [
+        vibe,
+        str(styles.VIBE_BASE.get(vibe, "")),
+        str(vibe_grammar.get("color_energy", "")),
+        str(vibe_grammar.get("contrast", "")),
+        str(vibe_grammar.get("motion", "")),
+    ]
+    structure_terms = [
+        str(intensity_grammar.get("detail", "")),
+        str(intensity_grammar.get("negative_space", "")),
+        str(styles.WALLPAPER_STYLE_HINTS.get(style, "")),
+    ]
+    palette = [str(color) for color in color_grammar.get("palette", [])]
+
+    topic_hits = sum(1 for term in topic_terms if term and _query_contains(query, term))
+    vibe_hits = sum(1 for term in vibe_terms if term and _query_contains(query, term))
+    structure_hits = sum(1 for term in structure_terms if term and _query_contains(query, term))
+    palette_hits = sum(1 for color in palette if color and _query_contains(query, color))
+
+    preference_state = str(preference_grammar.get("state") or "neutral")
+    preference_bonus = 0.08 if preference_state == "reinforced" else 0.04 if preference_state == "neutral" else 0.0
+    novelty_bonus = 0.05 if repeated_count == 0 or novelty_hint else 0.0
+
+    components = {
+        "topic_alignment": _clamp_score(topic_hits / max(1, len(topic_terms))),
+        "vibe_alignment": _clamp_score(vibe_hits / max(1, len(vibe_terms))),
+        "structure_alignment": _clamp_score(structure_hits / max(1, len(structure_terms))),
+        "palette_alignment": _clamp_score(palette_hits / max(1, len(palette))),
+        "preference_alignment": _clamp_score(preference_bonus),
+        "novelty_alignment": _clamp_score(novelty_bonus),
+    }
+    score = _clamp_score(
+        (components["topic_alignment"] * 0.28)
+        + (components["vibe_alignment"] * 0.18)
+        + (components["structure_alignment"] * 0.22)
+        + (components["palette_alignment"] * 0.17)
+        + components["preference_alignment"]
+        + components["novelty_alignment"]
+    )
+    if score >= 0.78:
+        grade = "strong"
+    elif score >= 0.58:
+        grade = "usable"
+    else:
+        grade = "weak"
+
+    return {
+        "score": score,
+        "grade": grade,
+        "components": components,
+        "topic": topic,
+        "vibe": vibe,
+        "intensity": intensity,
+        "style": style,
+    }
+
+
 def _max_query_similarity(candidate_query: str, memory: list[dict]) -> float:
     candidate_vec = encode_text(candidate_query)
     max_similarity = 0.0
@@ -116,6 +205,16 @@ def build_wallpaper_payload(
         "recent_count": repeated_count,
         "novelty_hint_applied": novelty_hint is not None,
     }
+    visual_fit = _build_visual_fit(
+        topic=topic,
+        vibe=vibe,
+        intensity=intensity,
+        style=style_key,
+        query=query_payload["wallpaper_query"],
+        query_payload=query_payload,
+        repeated_count=repeated_count,
+        novelty_hint=novelty_hint,
+    )
 
     return {
         **query_payload,
@@ -127,5 +226,6 @@ def build_wallpaper_payload(
         "prompt_components": prompt_components,
         "generation_metadata": generation_metadata,
         "novelty_context": novelty_context,
+        "visual_fit": visual_fit,
         "visual_grammar": visual_grammar,
     }

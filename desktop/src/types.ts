@@ -82,6 +82,15 @@ export type Recommendation = {
     recent_count?: number;
     novelty_hint_applied?: boolean;
   };
+  visual_fit?: {
+    score?: number;
+    grade?: string;
+    components?: Record<string, number>;
+    topic?: Topic;
+    vibe?: Vibe;
+    intensity?: "low" | "balanced" | "high";
+    style?: WallpaperStyle;
+  };
   classification_confidence?: {
     topic_scores_all?: Record<Topic, number>;
     primary_topic_confidence?: number;

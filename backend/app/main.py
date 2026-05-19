@@ -462,6 +462,7 @@ def build_context_recommendation(
     prompt_components = wallpaper.get("prompt_components")
     generation_metadata = wallpaper.get("generation_metadata")
     novelty_context = wallpaper.get("novelty_context")
+    visual_fit = wallpaper.get("visual_fit")
     visual_grammar = wallpaper.get("visual_grammar")
     mirror_derived_state(
         {
@@ -474,6 +475,7 @@ def build_context_recommendation(
             "prompt_components_json": prompt_components,
             "generation_metadata_json": generation_metadata,
             "novelty_context_json": novelty_context,
+            "visual_fit_json": visual_fit,
             "visual_grammar_json": visual_grammar,
             "wallpaper_query": wallpaper["wallpaper_query"],
             "wallpaper_palette_json": wallpaper["wallpaper_palette"],
@@ -503,6 +505,7 @@ def build_context_recommendation(
         prompt_components=prompt_components,
         generation_metadata=generation_metadata,
         novelty_context=novelty_context,
+        visual_fit=visual_fit,
         classification_confidence=classification_confidence,
         session_context=session_context,
     )

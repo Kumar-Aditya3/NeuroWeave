@@ -97,6 +97,7 @@ create table if not exists public.derived_state (
   prompt_components_json jsonb,
   generation_metadata_json jsonb,
   novelty_context_json jsonb,
+  visual_fit_json jsonb,
   visual_grammar_json jsonb,
   wallpaper_query text not null,
   wallpaper_palette_json jsonb,
@@ -105,6 +106,9 @@ create table if not exists public.derived_state (
   wallpaper_provider text,
   updated_at timestamptz not null default now()
 );
+
+alter table public.derived_state
+add column if not exists visual_fit_json jsonb;
 
 alter table public.events_raw enable row level security;
 alter table public.devices_state enable row level security;
